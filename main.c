@@ -12,48 +12,55 @@
 #include "storage.h"
 #include "dungeon.h"
 #include "ui.h"
+#include "render.h"
+#include "caps.h"
 
 /* Shows the main menu and returns the player choice. */
+static void mainMenuDraw(void *ctx, int sel)
+{
+    static const char *items[] = { "Game Baru", "Lanjutkan", "Leaderboard", "Keluar" };
+    static const int nums[] = { 1, 2, 3, 0 };
+    const Glyphs *g = caps_glyphs();
+    int i;
+    (void)ctx;
+
+    ui_frame("Menu Utama");
+    render_text(2, 0, ST_TITLE, "G A C H A   Q U E S T");
+    for (i = 0; i < 22; i++)
+        render_text(3, i, ST_BORDER, "%s", g->hz);
+    ui_menu_v(5, 2, items, nums, 4, sel);
+    ui_message(20);
+}
+
 int mainMenu(void)
 {
-    int choice;
-
-    clear_screen();
-    printf("%s", ANSI_CYAN);
-    printf("           GACHA QUEST\n");
-    printf("%s", ANSI_RESET);
-    draw_menu(1, "Game Baru");
-    draw_menu(2, "Lanjutkan");
-    draw_menu(3, "Leaderboard");
-    draw_menu(0, "Keluar");
-    if (last_message()[0] != '\0')
-        printf("%s%s%s\n", ANSI_CYAN, last_message(), ANSI_RESET);
-    printf("Pilih: ");
-    choice = readInt("", 0, 3);
+    static const char *items[] = { "Game Baru", "Lanjutkan", "Leaderboard", "Keluar" };
+    static const int nums[] = { 1, 2, 3, 0 };
+    int choice = ui_menu_pick(items, nums, 4, 0, 3, mainMenuDraw, NULL);
     set_message("");
     return choice;
+}
+
+static void hubMenuDraw(void *ctx, int sel)
+{
+    static const char *items[] = { "Battle", "Gacha", "Inventory", "Shop", "Dungeon",
+                                   "Status", "Simpan", "Kembali ke menu utama" };
+    static const int nums[] = { 1, 2, 3, 4, 5, 6, 7, 0 };
+    const Player *p = ctx;
+
+    ui_frame("Hub");
+    ui_status_panel_at(p, 2, 0, UI_COLS);
+    ui_menu_v(9, 2, items, nums, 8, sel);
+    ui_message(20);
 }
 
 /* Shows the game hub and returns the player choice. */
 int hubMenu(const Player *p)
 {
-    int choice;
-
-    clear_screen();
-    draw_header("HUB", p);
-    draw_menu(1, "Battle");
-    draw_menu(2, "Gacha");
-    draw_menu(3, "Inventory");
-    draw_menu(4, "Shop");
-    draw_menu(5, "Dungeon");
-    draw_menu(6, "Status");
-    draw_menu(7, "Simpan");
-    draw_menu(0, "Kembali ke menu utama");
-    if (last_message()[0] != '\0')
-        printf("%s%s%s\n", ANSI_CYAN, last_message(), ANSI_RESET);
-    printf("Pilih: ");
-    choice = readInt("", 0, 7);
-    return choice;
+    static const char *items[] = { "Battle", "Gacha", "Inventory", "Shop", "Dungeon",
+                                   "Status", "Simpan", "Kembali ke menu utama" };
+    static const int nums[] = { 1, 2, 3, 4, 5, 6, 7, 0 };
+    return ui_menu_pick(items, nums, 8, 0, 7, hubMenuDraw, (void *)p);
 }
 
 /* Hub loop: every feature is reachable from here. */

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 #include "config.h"
 #include "util.h"
 #include "ui.h"
@@ -151,6 +152,23 @@ void ui_message(int row)
     if (caps_interactive()) widget_msg(row, 0, UI_COLS, lastMessage);
 }
 
+/* Player status panel: Pemain/Level/HP bar/Gold+Potion inside a bordered panel. */
+void ui_status_panel_at(const Player *p, int row, int col, int w)
+{
+    char num[16];
+    int off;
+    ui_panel(row, col, w, 6, "Status");
+    render_text(row + 1, col + 2, ST_TEXT, "Pemain : %s", p->name);
+    render_text(row + 2, col + 2, ST_TEXT, "Level  : %d (Skor %d)", p->level, p->score);
+    render_text(row + 3, col + 2, ST_TEXT, "HP ");
+    ui_hp_bar(row + 3, col + 5, w - 6, p->hp, p->maxHp);
+    render_text(row + 4, col + 2, ST_TEXT, "Gold   : ");
+    snprintf(num, sizeof num, "%d", p->gold);
+    render_text(row + 4, col + 2 + 9, ST_GOLD, "%s", num);
+    off = 2 + 9 + ui_visible_len(num);
+    render_text(row + 4, col + off, ST_TEXT, "   Potion: %d", p->potion);
+}
+
 void ui_wait_enter(const char *text)
 {
     if (!caps_interactive()) {
@@ -188,6 +206,18 @@ static int menuPickFallback(const char *const *items, const int *nums, int n,
     return readInt("", minNum, maxNum);
 }
 
+static void keyWait(int key)
+{
+    if (key < 0) {
+#ifdef _WIN32
+        Sleep(10);
+#else
+        struct timespec ts = { 0, 10000000 };
+        nanosleep(&ts, NULL);
+#endif
+    }
+}
+
 int ui_menu_pick(const char *const *items, const int *nums, int n,
                  int minNum, int maxNum, UiDrawFn draw, void *ctx)
 {
@@ -202,6 +232,7 @@ int ui_menu_pick(const char *const *items, const int *nums, int n,
             ui_flush();
             {
                 TermKey k = term_getkey(&ch);
+                keyWait((int)k);
                 switch (k) {
                 case KEY_UP: sel = (sel + n - 1) % n; break;
                 case KEY_DOWN: sel = (sel + 1) % n; break;
@@ -296,6 +327,7 @@ int ui_pick_row(int count, UiDrawFn draw, void *ctx)
         ui_flush();
         {
             TermKey k = term_getkey(&ch);
+            keyWait((int)k);
             switch (k) {
             case KEY_UP: sel = (sel + count - 1) % count; break;
             case KEY_DOWN: sel = (sel + 1) % count; break;

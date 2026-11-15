@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic
 INC = -Isrc/core -Isrc/util -Isrc/ui -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon
 CFLAGS += $(INC)
 MODUL = main.c \

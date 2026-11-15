@@ -32,6 +32,7 @@ void ui_menu_v(int row, int col, const char *const *items, const int *nums, int 
 void ui_menu_h(int row, int col, const char *const *items, const int *nums, int n, int sel);
 void ui_footer(const char *extra);
 void ui_message(int row);                /* shows last_message when interactive */
+void ui_status_panel_at(const Player *p, int row, int col, int w);
 
 /* Menu loop shared by every screen. Returns the chosen number (not the index). */
 int ui_menu_pick(const char *const *items, const int *nums, int n,
