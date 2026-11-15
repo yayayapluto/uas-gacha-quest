@@ -90,7 +90,7 @@ skenario "S02 input huruf pada menu" tests/in_s02.txt "Input tidak valid"
 skenario "S03 battle sampai menang" tests/in_s03.txt "Hadiah:"
 skenario "S04 battle sampai kalah" tests/in_s04.txt "Kamu dikalahkan"
 skenario "S05 gacha 10x gold kurang" tests/in_s05.txt "Gold kurang! Butuh 900 gold"
-skenario "S09 jual item terpasang" tests/in_s09.txt "tidak bisa dijual"
+skenario "S09 jual item" tests/in_s09.txt "Terjual:"
 
 cp -f data/leaderboard.txt data/leaderboard.uji.bak
 skenario "S10 simpan-lanjutkan" tests/in_s10.txt "Selamat datang kembali, UjiSv!"

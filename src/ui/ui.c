@@ -359,6 +359,10 @@ int ui_menu_pick(const char *const *items, const int *nums, int n,
                     draw(ctx, sel);
                     ui_flush();
                     break;
+                case KEY_NONE:
+                    /* poll timeout: nothing was consumed, so redrawing here
+                       would only burn CPU and eat keys queued behind it */
+                    break;
                 default:
                     break;
                 }

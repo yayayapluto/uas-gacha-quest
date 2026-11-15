@@ -47,7 +47,74 @@ static void shopDraw(void *ctx, int sel)
     render_text_clipped(18, 2, UI_COLS - 4, ST_ACCENT, "%s", rows[cur].name);
     render_text_clipped(19, 2, UI_COLS - 4, ST_TEXT, "%s", rows[cur].desc);
     render_text_clipped(20, 2, UI_COLS - 4, ST_GOLD, "%s", rows[cur].stat);
+
+    /* the message panel is always drawn, so a refusal does not shift the list */
+    ui_panel(22, 0, UI_COLS, 3, "Info");
+    if (last_message()[0] != '\0')
+        render_text_clipped(23, 2, UI_COLS - 4, ST_TEXT, "%s", last_message());
     ui_footer(NULL);
+}
+
+/* Sell sub-screen: the inventory as a pickable list. Items that are equipped
+   are listed but marked, so the player sees why they cannot be sold. */
+typedef struct {
+    const Player *p;
+    int *rows;   /* original inventory index for each drawn row */
+    int count;
+} SellCtx;
+
+static void sellDraw(void *ctx, int sel)
+{
+    const SellCtx *c = ctx;
+    int i;
+
+    ui_frame("Jual Item");
+    ui_panel(2, 0, UI_COLS, 14, "Inventory");
+    for (i = 0; i < c->count && i < 12; i++) {
+        int idx = c->rows[i];
+        const Item *it = &c->p->inventory[idx];
+        int locked = idx == c->p->weaponIndex || idx == c->p->armorIndex;
+        Style st = (i == sel) ? ST_SELECTED : style_rarity(it->rarity);
+        char nameBuf[MAX_NAME];
+        char stats[40];
+        /* names are padded by bytes, so a long one would shift the columns;
+           copying into a fixed field keeps every row aligned */
+        snprintf(nameBuf, sizeof nameBuf, "%s", it->name);
+        nameBuf[17] = '\0';   /* column is 17 cells wide */
+        snprintf(stats, sizeof stats, "%s %-9s +%-5d", locked ? "!" : " ",
+                 rarityName(it->rarity), it->power);
+        render_text(3 + i, 2, st, "%-2d", idx);
+        render_text(3 + i, 5, st, "%-17.17s", nameBuf);
+        render_text_clipped(3 + i, 23, 17, st, "%s", stats);
+        render_text(3 + i, 41, st, "%4d g", duplicatePrice(it->rarity));
+    }
+    if (c->count == 0)
+        render_text_clipped(3, 2, UI_COLS - 4, ST_DIM, "Inventory kosong.");
+    ui_message(16);
+    ui_footer(NULL);
+}
+
+static int pickSellItem(Player *p)
+{
+    int rows[MAX_ITEM];
+    SellCtx c;
+    int i, sel;
+
+    for (i = 0; i < p->itemCount; i++) rows[i] = i;
+    c.p = p;
+    c.rows = rows;
+    c.count = p->itemCount;
+    if (p->itemCount <= 0) return -1;
+    sel = ui_pick_row(p->itemCount, sellDraw, &c);
+    if (sel < 0) return -1;
+    i = rows[sel];
+    if (i == p->weaponIndex || i == p->armorIndex) {
+        /* refusal is reported on the product screen, which owns the message
+           panel; looping here would swallow the message unseen */
+        set_message("Item sedang terpasang, tidak bisa dijual: %s.", p->inventory[i].name);
+        return -1;
+    }
+    return i;
 }
 
 void shopMenu(Player *p)
@@ -103,13 +170,8 @@ void shopMenu(Player *p)
                 set_message("Inventory kosong, tidak ada yang bisa dijual.");
                 break;
             }
-            for (i = 0; i < p->itemCount; i++)
-                ui_log_style(style_rarity(p->inventory[i].rarity),
-                             "%-4d %-20s %-10s %-5d %d",
-                             i, p->inventory[i].name, rarityName(p->inventory[i].rarity),
-                             p->inventory[i].power, duplicatePrice(p->inventory[i].rarity));
-            index = readInt("Nomor indeks item yang dijual (999 batal): ", 0, 999);
-            if (index == 999) break;
+            index = pickSellItem(p);
+            if (index < 0) break;
             if (index >= p->itemCount) {
                 set_message("Indeks tidak ada di inventory.");
                 break;
