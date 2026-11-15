@@ -89,7 +89,7 @@ skenario "S01 nama kosong/terlalu panjang" tests/in_s01.txt "| Pemain : AAAAAAAA
 skenario "S02 input huruf pada menu" tests/in_s02.txt "Input tidak valid"
 skenario "S03 battle sampai menang" tests/in_s03.txt "Hadiah:"
 skenario "S04 battle sampai kalah" tests/in_s04.txt "Kamu dikalahkan"
-skenario "S05 gacha 10x gold kurang" tests/in_s05.txt "Gold kurang! Pull 10x butuh 900"
+skenario "S05 gacha 10x gold kurang" tests/in_s05.txt "Gold kurang! Butuh 900 gold"
 skenario "S09 jual item terpasang" tests/in_s09.txt "tidak bisa dijual"
 
 cp -f data/leaderboard.txt data/leaderboard.uji.bak
@@ -97,19 +97,26 @@ skenario "S10 simpan-lanjutkan" tests/in_s10.txt "Selamat datang kembali, UjiSv!
 skenario "S15 leaderboard tercatat" tests/in_s15.txt "Skor UjiSkr"
 mv -f data/leaderboard.uji.bak data/leaderboard.txt
 
+# Legacy slot 1 is only read while data/save_1.txt is absent: hide the other
+# slots so the damaged legacy file is what slot 1 resolves to.
+mkdir -p data/uji.bak
+for f in data/save_*.txt; do [ -f "$f" ] && mv -f "$f" "data/uji.bak/$(basename "$f")"; done
 if [ -f data/save.txt ]; then cp -f data/save.txt data/save.uji.bak; fi
 printf "xxx|1|1|1|1|1|1|1|1|1|1|1|1|1|1\n" > data/save.txt
 skenario "S11 save.txt dirusak" tests/in_s11.txt "Gagal memuat"
-if [ -f data/save.uji.bak ]; then mv -f data/save.uji.bak data/save.txt; else rm -f data/save.txt; fi
+rm -f data/save.txt
+if [ -f data/save.uji.bak ]; then mv -f data/save.uji.bak data/save.txt; fi
+for f in data/uji.bak/save_*.txt; do [ -f "$f" ] && mv -f "$f" "data/$(basename "$f")"; done
+rmdir data/uji.bak 2>/dev/null
 skenario "S12 gerak ke tembok" tests/in_s12.txt "Tembok! Tidak bisa lewat."
 skenario "S13 hint gold kurang" tests/in_s13.txt "Gold kurang, hint butuh 30 gold"
 
 skenario "S16 seed dunia diminta saat game baru" tests/in_s16.txt "dibangun dari seed 777"
 hits=$(grep -c "dibangun dari seed 777" tests/out_last.txt)
 if [ "$hits" -eq 2 ]; then
-    lulus "S16 seed yang sama dipakai lagi setelah Lanjutkan"
+    lulus "S16 seed yang sama dipakai lagi setelah Load Game"
 else
-    gagal "S16 seed yang sama dipakai lagi setelah Lanjutkan (ditemukan $hits kali)"
+    gagal "S16 seed yang sama dipakai lagi setelah Load Game (ditemukan $hits kali)"
 fi
 
 echo ""

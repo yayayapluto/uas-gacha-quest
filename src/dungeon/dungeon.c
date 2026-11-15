@@ -233,6 +233,23 @@ static int bfsToTreasure(char area[][AREA_MAX], Point from, Point path[])
     return -1;
 }
 
+/* Non-interactive status line: same fields as the boxed panel, colorized,
+   with a text HP bar so piped output still shows the health ratio. */
+static void printDungeonStatus(const DungeonState *st, const Player *p, int steps)
+{
+    char bar[32];
+    int w = 20, filled = p->maxHp > 0 ? p->hp * w / p->maxHp : 0;
+    int i;
+
+    if (filled < 0) filled = 0;
+    if (filled > w) filled = w;
+    for (i = 0; i < w; i++) bar[i] = i < filled ? '#' : '-';
+    bar[w] = '\0';
+    printf("Posisi dunia (%d,%d) | langkah %d | HP %s%d/%d%s [%s] | gold %d | seed %u\n",
+           st->posX, st->posY, steps, hp_color(p->hp, p->maxHp), p->hp, p->maxHp,
+           ANSI_RESET, bar, p->gold, st->seed);
+}
+
 /* Draws a window of the cached area with the player always in the middle. */
 static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
                           char trail[][AREA_MAX], const char *message, int steps,
@@ -259,10 +276,7 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
             }
             printf("\n");
         }
-        printf("Posisi dunia (%d,%d) | langkah %d | HP %s%d/%d%s | gold %d | seed %u\n",
-               st->posX, st->posY, steps,
-               hp_color(p->hp, p->maxHp), p->hp, p->maxHp, ANSI_RESET,
-               p->gold, st->seed);
+        printDungeonStatus(st, p, steps);
         printf("%s\n", message);
         printf("Gerak (W/A/S/D, H hint %d gold, Q keluar): ", HINT_COST);
         fflush(stdout);
@@ -290,10 +304,15 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
             }
         }
     }
-    render_text(18, 2, ST_TEXT, "Posisi dunia (%d,%d) | langkah %d | HP %d/%d | gold %d | seed %u",
-                st->posX, st->posY, steps, p->hp, p->maxHp, p->gold, st->seed);
-    render_text(19, 2, ST_DIM, "%s", message);
-    render_text(21, 2, ST_DIM, "Gerak (W/A/S/D, H hint %d gold, Q keluar)", HINT_COST);
+    ui_panel(17, 0, UI_COLS, 5, "Status");
+    render_text_clipped(18, 2, UI_COLS - 4, ST_TEXT, "Posisi dunia (%d,%d)", st->posX, st->posY);
+    render_text_clipped(18, 21, 10, ST_TEXT, "langkah %d", steps);
+    render_text_clipped(18, 34, 12, ST_GOLD, "gold %d", p->gold);
+    render_text(19, 2, style_hp(p->hp, p->maxHp), "HP %d/%d", p->hp, p->maxHp);
+    ui_hp_bar(20, 2, 24, p->hp, p->maxHp);
+    render_text_clipped(20, 28, UI_COLS - 30, ST_DIM, "seed %u", st->seed);
+    render_text_clipped(22, 2, UI_COLS - 4, ST_DIM, "%s", message);
+    render_text(23, 2, ST_DIM, "Gerak (W/A/S/D, H hint %d gold, Q keluar)", HINT_COST);
     ui_footer(NULL);
     ui_flush();
 }

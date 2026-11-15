@@ -21,10 +21,18 @@
 
 static char lastMessage[256];
 
+#define LOG_PARTS 8
+
 typedef struct {
-    char text[192];
+    char text[96];
     Style st;
+} LogPart;
+
+typedef struct {
+    LogPart part[LOG_PARTS];
+    int count;
 } LogLine;
+
 static LogLine logLines[24];
 static int logCount = 0;
 
@@ -62,48 +70,133 @@ const char *last_message(void)
 
 void ui_log_clear(void) { logCount = 0; }
 
+/* Appends one styled segment to a log line; fallback mode prints the text. */
+static void logPart(LogLine *l, const char *text, Style st)
+{
+    LogPart *p;
+    if (l->count >= LOG_PARTS) return;
+    p = &l->part[l->count++];
+    snprintf(p->text, sizeof p->text, "%s", text);
+    p->st = st;
+    if (!caps_interactive()) printf("%s", text);
+}
+
 void ui_log_style(Style st, const char *fmt, ...)
 {
+    char buf[192];
     va_list args;
+    LogLine *l;
+
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof buf, fmt, args);
+    va_end(args);
     if (logCount < 24) {
-        LogLine *l = &logLines[logCount];
-        va_start(args, fmt);
-        vsnprintf(l->text, sizeof l->text, fmt, args);
-        va_end(args);
-        l->st = st;
-        logCount++;
+        l = &logLines[logCount++];
+        l->count = 0;
+        logPart(l, buf, st);
+    } else if (!caps_interactive()) {
+        printf("%s", buf);
     }
-    if (!caps_interactive()) {
-        /* fallback mode prints the line right away, exactly like the old printf */
-        va_start(args, fmt);
-        vprintf(fmt, args);
-        va_end(args);
-        printf("\n");
-    }
+    if (!caps_interactive()) printf("\n");
 }
 
 void ui_log(const char *fmt, ...)
 {
-    va_list args;
     char buf[192];
+    va_list args;
     va_start(args, fmt);
     vsnprintf(buf, sizeof buf, fmt, args);
     va_end(args);
     ui_log_style(ST_TEXT, "%s", buf);
 }
 
+void ui_log_event(const char *actor, const char *action, const char *target,
+                  const char *value, Style actorSt, Style targetSt, Style valueSt)
+{
+    LogLine *l;
+
+    if (logCount >= 24) {
+        if (!caps_interactive()) {
+            printf("%s %s %s\n", actor != NULL ? actor : "", action != NULL ? action : "",
+                   target != NULL ? target : "");
+        }
+        return;
+    }
+    l = &logLines[logCount++];
+    l->count = 0;
+    /* one segment per semantic piece: actor, verb, target, value; the spaces
+       are baked into the next segment so the count stays at four */
+    if (actor != NULL) logPart(l, actor, actorSt);
+    if (action != NULL) {
+        char verb[96];
+        snprintf(verb, sizeof verb, " %s", action);
+        logPart(l, verb, ST_TEXT);
+    }
+    if (target != NULL) {
+        char tgt[96];
+        snprintf(tgt, sizeof tgt, " %s", target);
+        logPart(l, tgt, targetSt);
+    }
+    if (value != NULL) {
+        char val[96];
+        snprintf(val, sizeof val, " %s", value);
+        logPart(l, val, valueSt);
+    }
+    if (!caps_interactive()) printf("\n");
+}
+
 int ui_log_count(void) { return logCount; }
 
-const char *ui_log_text(int i)
+int ui_log_part_count(int i)
+{
+    if (i < 0 || i >= logCount) return 0;
+    return logLines[i].count;
+}
+
+const char *ui_log_part_text(int i, int part)
 {
     if (i < 0 || i >= logCount) return "";
-    return logLines[i].text;
+    if (part < 0 || part >= logLines[i].count) return "";
+    return logLines[i].part[part].text;
+}
+
+Style ui_log_part_style(int i, int part)
+{
+    if (i < 0 || i >= logCount || part < 0 || part >= logLines[i].count) return ST_TEXT;
+    return logLines[i].part[part].st;
+}
+
+/* Concatenated text of one line, for grep-style checks and plain output. */
+const char *ui_log_text(int i)
+{
+    static char joined[400];
+    int k;
+    size_t n = 0;
+
+    joined[0] = '\0';
+    if (i < 0 || i >= logCount) return joined;
+    for (k = 0; k < logLines[i].count && n < sizeof joined - 1; k++) {
+        int w = snprintf(joined + n, sizeof joined - n, "%s", logLines[i].part[k].text);
+        if (w < 0) break;
+        n += (size_t)w;
+    }
+    return joined;
 }
 
 Style ui_log_style_at(int i)
 {
-    if (i < 0 || i >= logCount) return ST_TEXT;
-    return logLines[i].st;
+    if (i < 0 || i >= logCount || logLines[i].count == 0) return ST_TEXT;
+    return logLines[i].part[0].st;
+}
+
+void ui_log_draw(int row, int col, int maxW, int i)
+{
+    int k, c = 0;
+
+    if (i < 0 || i >= logCount) return;
+    for (k = 0; k < logLines[i].count && c < maxW; k++)
+        c += render_span(row, col + c, maxW - c, logLines[i].part[k].st,
+                         logLines[i].part[k].st, logLines[i].part[k].text);
 }
 
 void ui_frame(const char *screen)
@@ -385,7 +478,14 @@ int ui_pick_row(int count, UiDrawFn draw, void *ctx)
 {
     int sel = 0;
     char ch;
-    if (!caps_interactive() || count <= 0) return -1;
+    if (count <= 0) return -1;
+    if (!caps_interactive()) {
+        /* piped input: draw once, then read a 1-based row number; 0 cancels */
+        draw(ctx, 0);
+        ui_flush();
+        sel = readInt("Pilih baris (0 batal): ", 0, count);
+        return sel > 0 ? sel - 1 : -1;
+    }
     for (;;) {
         draw(ctx, sel);
         ui_flush();

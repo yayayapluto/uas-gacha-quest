@@ -18,10 +18,68 @@
 #include "autosave.h"
 #include "rng.h"
 
+/* Slot picker shared by Load Game and Simpan. Rows show the saved player name
+   so the player can tell saves apart; a free slot reads "(kosong)". When
+   allowCreate is set, a "Buat save baru" row targets the first free slot.
+   Returns the chosen slot number, or -1 on cancel. */
+typedef struct {
+    int allowCreate;
+    int freeSlot;
+} SlotPickerCtx;
+
+static const char *slotRowLabel(int slot, char *buf, int size)
+{
+    char name[MAX_NAME];
+
+    if (saveSlotExists(slot) && saveSlotName(slot, name, MAX_NAME))
+        snprintf(buf, (size_t)size, "Slot %d  %s", slot, name);
+    else
+        snprintf(buf, (size_t)size, "Slot %d  (kosong)", slot);
+    return buf;
+}
+
+static void slotPickerDraw(void *ctx, int sel)
+{
+    const SlotPickerCtx *c = ctx;
+    int i, row = 3;
+
+    ui_frame(c->allowCreate ? "Simpan Game" : "Load Game");
+    for (i = 0; i < SAVE_SLOTS; i++) {
+        char label[MAX_NAME + 24];
+        render_text(row++, 2, i == sel ? ST_SELECTED : ST_TEXT, "%s",
+                    slotRowLabel(i + 1, label, (int)sizeof label));
+    }
+    if (c->allowCreate) {
+        char label[48];
+        if (c->freeSlot > 0)
+            snprintf(label, sizeof label, "Buat save baru (slot %d)", c->freeSlot);
+        else
+            snprintf(label, sizeof label, "Buat save baru (penuh)");
+        render_text(row++, 2, sel == SAVE_SLOTS ? ST_SELECTED : ST_TEXT, "%s", label);
+    }
+    render_text(row + 1, 2, sel == row - 3 ? ST_SELECTED : ST_TEXT, "Kembali");
+    ui_message(15);
+    ui_footer(NULL);
+}
+
+static int pickSaveSlot(int allowCreate)
+{
+    SlotPickerCtx ctx;
+    int count = SAVE_SLOTS + (allowCreate ? 2 : 1);
+    int sel;
+
+    ctx.allowCreate = allowCreate;
+    ctx.freeSlot = saveSlotFirstFree();
+    sel = ui_pick_row(count, slotPickerDraw, &ctx);
+    if (sel < 0 || sel == count - 1) return -1;
+    if (sel == SAVE_SLOTS) return ctx.freeSlot > 0 ? ctx.freeSlot : -1;
+    return sel + 1;
+}
+
 /* Shows the main menu and returns the player choice. */
 static void mainMenuDraw(void *ctx, int sel)
 {
-    static const char *items[] = { "Game Baru", "Lanjutkan", "Leaderboard", "Keluar" };
+    static const char *items[] = { "Game Baru", "Load Game", "Leaderboard", "Keluar" };
     static const int nums[] = { 1, 2, 3, 0 };
     (void)ctx;
 
@@ -32,7 +90,7 @@ static void mainMenuDraw(void *ctx, int sel)
 
 int mainMenu(void)
 {
-    static const char *items[] = { "Game Baru", "Lanjutkan", "Leaderboard", "Keluar" };
+    static const char *items[] = { "Game Baru", "Load Game", "Leaderboard", "Keluar" };
     static const int nums[] = { 1, 2, 3, 0 };
     int choice = ui_menu_pick(items, nums, 4, 0, 3, mainMenuDraw, NULL);
     set_message("");
@@ -84,7 +142,12 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
         case 4: shopMenu(p); break;
         case 5: runDungeon(p); break;
         case 6: showStatus(p); break;
-        case 7: saved = saveGame(p); break;
+        case 7: {
+            int slot = pickSaveSlot(1);
+            if (slot > 0) saved = saveGameSlot(p, slot);
+            else saved = 0;
+            break;
+        }
         case 0: {
             char answer[MAX_NAME];
             if (!saved) {
@@ -176,13 +239,16 @@ int main(void)
             runHub(&player, catalog, catalogCount, monsters, monsterCount);
             break;
         }
-        case 2:
-            if (loadGame(&player, catalog, catalogCount)) {
+        case 2: {
+            int slot = pickSaveSlot(0);
+            if (slot > 0 && loadGameSlot(&player, catalog, catalogCount, slot)) {
                 runHub(&player, catalog, catalogCount, monsters, monsterCount);
             } else {
+                if (slot > 0 && last_message()[0] == 0) set_message("Slot %d tidak bisa dimuat.", slot);
                 ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             }
             break;
+        }
         case 3:
             showLeaderboard();
             ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");

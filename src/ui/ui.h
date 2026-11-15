@@ -18,9 +18,19 @@ void ui_wait_enter(const char *text);
 void ui_log(const char *fmt, ...);
 void ui_log_style(Style st, const char *fmt, ...);
 void ui_log_clear(void);
+/* Rich log line: actor and target/reason facts rendered with their own styles.
+   action is what the actor did (verb), value is the headline number or result
+   ("13 damage", "+12 gold"); pass NULL to omit the tail. */
+void ui_log_event(const char *actor, const char *action, const char *target,
+                  const char *value, Style actorSt, Style targetSt, Style valueSt);
 int ui_log_count(void);
-const char *ui_log_text(int i);
+const char *ui_log_text(int i);          /* whole line, concatenated */
 Style ui_log_style_at(int i);
+int ui_log_part_count(int i);            /* styled segments of one line */
+const char *ui_log_part_text(int i, int part);
+Style ui_log_part_style(int i, int part);
+/* Draws one log line at row, mixing the per-segment styles; returns rows used. */
+void ui_log_draw(int row, int col, int maxW, int i);
 
 void ui_frame(const char *screen);       /* start a frame: wipe grid, draw title row */
 void ui_flush(void);                     /* send the frame to the terminal */

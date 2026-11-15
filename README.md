@@ -142,7 +142,8 @@ bin/game          (Linux: ./bin/game)
    (30 gold, maks 3x), Q = keluar. Rincian di bagian berikut.
 7. **Simpan** (hub menu 7) atau Kembali ke menu utama (dipaksa menawarkan simpan,
    lalu skor dicatat ke leaderboard).
-8. Menu utama **Lanjutkan** memuat data/save.txt; **Leaderboard** menampilkan top 5.
+8. Menu utama **Load Game** menampilkan 5 save slot (nama pemain tiap slot) dan
+   memuat slot yang dipilih; **Leaderboard** menampilkan top 5.
 
 ## Dungeon Prosedural dan Seed
 
@@ -154,8 +155,8 @@ menyimpan peta.
   `x = 1 (mod 6)`. Sel lantai lain kosong, dan sekitar satu dari 89 sel lantai
   berisi treasure. Semua keputusan itu berasal dari `cellHash(seed, x, y)`,
   sebuah hash integer murni tanpa `rand()`.
-- **Seed sama, peta sama.** Seed yang diminta saat game baru disimpan di
-  `data/save.txt`, jadi **Lanjutkan** mengembalikan dunia yang sama persis.
+- **Seed sama, peta sama.** Seed yang diminta saat game baru ikut tersimpan di
+  save slot, jadi **Load Game** mengembalikan dunia yang sama persis.
   Seed juga tampil di menu Status dan di baris info dungeon.
 - **Seed kosong.** Kalau prompt seed dijawab Enter, program memakai seed dari
   jam sistem dan menampilkannya supaya bisa dicatat dan dipakai ulang.
@@ -197,7 +198,7 @@ menyimpan peta.
 | src/platform/crash.c/.h | Handler crash di sigaltstack: pulihkan terminal, catat `data/crash.log` |
 | src/platform/autosave.c/.h | Thread autosave (debounce, CRC, rotasi .bak, backoff) |
 | src/platform/platform.c/.h | platform_init/shutdown, status sesi sebelumnya, toggle permintaan shutdown |
-| data/ | item.txt, monster.txt (runtime: save.txt, leaderboard.txt, autosave.dat/.bak, session.lock, crash.log) |
+| data/ | item.txt, monster.txt (runtime: save_1..5.txt, leaderboard.txt, autosave.dat/.bak, session.lock, crash.log) |
 | tests/ | Driver uji C + skenario input pipa + run_tests.sh |
 
 Nama fungsi dan komentar di kode memakai bahasa Inggris. Teks yang dilihat
@@ -209,14 +210,14 @@ Dibuat saat bermain, tidak perlu di-commit (ada di `.gitignore`):
 
 | Berkas | Isi |
 | --- | --- |
-| `save.txt` | Progres manual (format di bawah) |
+| `save_1.txt` .. `save_5.txt` | Progres manual per slot (format di bawah). `save.txt` lama dibaca sebagai slot 1 selama `save_1.txt` belum ada |
 | `leaderboard.txt` | 10 skor teratas |
 | `autosave.dat` | Snapshot biner: magic `GQAS`, versi, panjang, CRC32, lalu struct `AutoSnapshot` (pemain, layar aktif, state battle/dungeon, state RNG) |
 | `autosave.bak` | Snapshot sebelumnya, dipakai bila `autosave.dat` rusak/terpotong |
 | `session.lock` | `RUNNING pid=<pid> start=<epoch>` selama berjalan, `CLEAN` setelah keluar rapi |
 | `crash.log` | Satu baris per crash (`crash sig=<n> pid=<pid>`) |
 
-## Format data/save.txt
+## Format data/save_N.txt
 
 Baris pertama berisi 15 field dipisah `|`:
 
@@ -225,8 +226,10 @@ nama|hp|maxHp|level|exp|gold|atk|def|potion|pity|totalPull|skor|seed|idSenjata|i
 ```
 
 Baris kedua adalah jumlah item, lalu satu ID item per baris. Field `seed`
-bertipe unsigned dan menyimpan seed dunia dungeon. Save lama tanpa field seed
-ditolak dengan pesan "format data/save.txt rusak", jadi mulai game baru sekali
+bertipe unsigned dan menyimpan seed dunia dungeon. Simpan di hub (menu 7)
+menampilkan kelima slot; pilih slot kosong, timpa slot terisi, atau pakai
+"Buat save baru" yang menunjuk slot kosong pertama. Save lama tanpa field seed
+ditolak dengan pesan "format save slot N rusak", jadi mulai game baru sekali
 setelah pembaruan ini.
 
 ## Pembagian Tugas (anggota A-E, sesuai PRD bagian 13)
@@ -251,7 +254,7 @@ setelah pembaruan ini.
   (payload utuh), penolakan snapshot rusak/terpotong, fallback `.bak`, tulis
   atomik, serta isi `session.lock` (`RUNNING pid=` lalu `CLEAN`).
 - Skenario menu: input pipa dari file ke program utama, hasil dicek grep.
-  S16 memastikan seed 777 dipakai lagi setelah simpan dan Lanjutkan.
+  S16 memastikan seed 777 dipakai lagi setelah simpan dan Load Game.
 - `make debug` mengulang seluruh pengujian dengan AddressSanitizer + UBSan.
 
 ## Demo alur (new game -> battle -> gacha -> equip -> dungeon -> save -> load -> leaderboard)

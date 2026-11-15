@@ -166,6 +166,25 @@ void render_text_clipped(int row, int col, int maxW, Style s, const char *fmt, .
     }
 }
 
+/* Mixed-style text: '~' toggles between base and alt, and is not drawn. */
+int render_span(int row, int col, int maxW, Style base, Style alt, const char *text)
+{
+    int c = 0;
+    int useAlt = 0;
+    const char *p = text;
+
+    if (maxW <= 0 || text == NULL) return 0;
+    while (*p && c < maxW) {
+        int adv, cp;
+        if (*p == '~') { useAlt = !useAlt; p++; continue; }
+        cp = decodeCp(p, &adv);
+        render_char(row, col + c, useAlt ? alt : base, (unsigned int)cp);
+        c++;
+        p += adv;
+    }
+    return c;
+}
+
 void render_flush(void)
 {
     int r;

@@ -98,3 +98,16 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
 28. **`make start` hanya menjalankan biner.** Deteksi tipe terminal tetap
     tanggung jawab `caps_detect`, bukan Makefile; duplikasi logika di Makefile
     akan berbeda hasil dengan programnya sendiri.
+29. **Log aksi disimpan sebagai segmen bergaya, bukan penanda dalam teks.**
+    `LogLine` menyimpan sampai empat bagian (`actor`, `action`, `target`,
+    `value`) dengan `Style` masing-masing, lalu `ui_log_draw` memanggil
+    `render_span` per bagian. Penanda `~` di dalam string akan rusak begitu
+    nama pemain atau item memuat karakter itu.
+30. **Lima save slot (`data/save_1..5.txt`).** Nomor slot tetap supaya daftar
+    di picker tidak berubah panjang; `data/save.txt` lama hanya dibaca sebagai
+    slot 1 selama `save_1.txt` belum ada, lalu otomatis tidak dipakai.
+    Autosave tetap terpisah (snapshot biner), karena tujuannya memulihkan sesi
+    yang crash, bukan memilih progres.
+31. **Picker baris punya fallback pipa.** `ui_pick_row` kini menggambar sekali
+    lalu membaca nomor baris saat stdin bukan terminal, sehingga jalur
+    non-interaktif (uji pipa) bisa memilih slot seperti jalur interaktif.

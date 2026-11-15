@@ -57,10 +57,78 @@ int loadMonsters(const char *file, Monster monsters[])
     return count;
 }
 
-/* Writes the player progress to data/save.txt (PRD section 9, plus the world seed); 1 on success. */
+void saveSlotPath(int slot, char *out, int size)
+{
+    snprintf(out, (size_t)size, "data/save_%d.txt", slot);
+}
+
+/* Legacy single-slot file: read as slot 1 only while it has not been replaced. */
+static const char *legacySavePath(void) { return "data/save.txt"; }
+
+static int fileHasData(const char *path)
+{
+    FILE *fp = fopen(path, "r");
+    int ok;
+    if (fp == NULL) return 0;
+    ok = fgetc(fp) != EOF;
+    fclose(fp);
+    return ok;
+}
+
+int saveSlotExists(int slot)
+{
+    char path[64];
+    if (slot < 1 || slot > SAVE_SLOTS) return 0;
+    saveSlotPath(slot, path, (int)sizeof path);
+    if (fileHasData(path)) return 1;
+    return slot == 1 && fileHasData(legacySavePath());
+}
+
+int saveSlotName(int slot, char *out, int size)
+{
+    char path[64], line[512];
+    FILE *fp;
+
+    out[0] = '\0';
+    if (slot < 1 || slot > SAVE_SLOTS) return 0;
+    saveSlotPath(slot, path, (int)sizeof path);
+    fp = fopen(path, "r");
+    if (fp == NULL) {
+        if (slot != 1) return 0;
+        fp = fopen(legacySavePath(), "r");
+        if (fp == NULL) return 0;
+    }
+    if (fgets(line, sizeof line, fp) != NULL) {
+        char *bar = strchr(line, '|');
+        if (bar != NULL) *bar = '\0';
+        snprintf(out, (size_t)size, "%s", line);
+    }
+    fclose(fp);
+    return out[0] != '\0';
+}
+
+int saveSlotFirstFree(void)
+{
+    int i;
+    for (i = 1; i <= SAVE_SLOTS; i++)
+        if (!saveSlotExists(i)) return i;
+    return 0;
+}
+
+/* Compatibility entry point: writes the first free slot, or slot 1 when all
+   slots are taken. */
 int saveGame(const Player *p)
 {
+    int slot = saveSlotFirstFree();
+    return saveGameSlot(p, slot > 0 ? slot : 1);
+}
+
+/* Writes the player progress to data/save_<slot>.txt (PRD section 9, plus the
+   world seed); 1 on success. Slot 1 also migrates over a legacy save.txt. */
+int saveGameSlot(const Player *p, int slot)
+{
     static char buf[4096];
+    char path[64];
     int weaponId = -1, armorId = -1, i;
     int n;
 
@@ -73,29 +141,50 @@ int saveGame(const Player *p)
                  p->itemCount);
     for (i = 0; i < p->itemCount; i++) {
         if (n < 0 || (size_t)n >= sizeof buf - 16) {
-            set_message("Gagal membuka data/save.txt untuk menulis.");
+            set_message("Gagal menulis save slot %d.", slot);
             return 0;
         }
         n += snprintf(buf + n, sizeof buf - (size_t)n, "%d\n", p->inventory[i].id);
     }
-    if (n < 0 || !file_write_atomic("data/save.txt", buf, (size_t)n)) {
-        set_message("Gagal membuka data/save.txt untuk menulis.");
+    if (slot < 1 || slot > SAVE_SLOTS) {
+        set_message("Nomor save tidak valid.");
         return 0;
     }
-    set_message("Progres tersimpan di data/save.txt.");
+    saveSlotPath(slot, path, (int)sizeof path);
+    if (n < 0 || !file_write_atomic(path, buf, (size_t)n)) {
+        set_message("Gagal menulis save slot %d.", slot);
+        return 0;
+    }
+    set_message("Progres tersimpan di slot %d.", slot);
     return 1;
 }
 
 /* Reads progress from data/save.txt; 0 when the file is missing or damaged. */
 int loadGame(Player *p, const Item items[], int count)
 {
-    FILE *fp = fopen("data/save.txt", "r");
+    return loadGameSlot(p, items, count, 1);
+}
+
+/* Reads one save slot; falls back to the legacy data/save.txt for slot 1.
+   Returns 0 when the slot is missing or damaged. */
+int loadGameSlot(Player *p, const Item items[], int count, int slot)
+{
+    char path[64];
+    FILE *fp;
+
+    if (slot < 1 || slot > SAVE_SLOTS) {
+        set_message("Nomor save tidak valid.");
+        return 0;
+    }
+    saveSlotPath(slot, path, (int)sizeof path);
+    fp = fopen(path, "r");
+    if (fp == NULL && slot == 1) fp = fopen(legacySavePath(), "r");
     char line[512];
     Player tmp;
     int weaponId, armorId, itemCount, i, j, id;
 
     if (fp == NULL) {
-        set_message("Gagal memuat: data/save.txt tidak ada.");
+        set_message("Gagal memuat: save slot %d tidak ada.", slot);
         return 0;
     }
     memset(&tmp, 0, sizeof tmp);
@@ -105,7 +194,7 @@ int loadGame(Player *p, const Item items[], int count)
                &tmp.atk, &tmp.def, &tmp.potion, &tmp.pity, &tmp.totalPull,
                &tmp.score, &tmp.seed, &weaponId, &armorId) != 15) {
         fclose(fp);
-        set_message("Gagal memuat: format data/save.txt rusak.");
+        set_message("Gagal memuat: format save slot %d rusak.", slot);
         return 0;
     }
     if (fgets(line, sizeof line, fp) == NULL || sscanf(line, "%d", &itemCount) != 1 ||
