@@ -91,13 +91,7 @@ void widget_menu_h(int row, int col, const char *const *items, const int *nums,
 /* The footer is a property of the frame, not of the caller: menu pickers and
    screens both ask for it, so it is drawn once at a fixed grid row. Drawing it
    relative to render_max_row() made the second call stack a duplicate line. */
-/* pinned to the bottom of the real terminal, not the baseline layout height */
-#define FOOTER_ROW footerRow()
-static int footerRow(void)
-{
-    int r = caps_rows() - 1;
-    return r < 1 ? UI_ROWS - 1 : r;
-}
+#define FOOTER_ROW (UI_ROWS - 1)
 
 void widget_footer(const char *extra)
 {

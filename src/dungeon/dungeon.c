@@ -470,22 +470,15 @@ static void handleContent(Player *p, const Monster monsters[], int monsterCount,
    Character cells are about twice as tall as they are wide, so the distance
    test weights the vertical offset to keep the lit area round on screen
    instead of an ellipse. */
+#define FOG_RADIUS 6.0f
 #define FOG_VERTICAL 2.0f   /* vertical cells per horizontal cell, roughly */
-#define FOG_MIN 4.0f
-#define FOG_FRACTION 0.45f  /* radius as a share of the smaller view axis */
 
-static float fogRadius(int vw, int vh)
-{
-    int half = vw / 2 < (int)(vh / FOG_VERTICAL) ? vw / 2 : (int)(vh / FOG_VERTICAL);
-    float r = half * FOG_FRACTION;
-    return r < FOG_MIN ? FOG_MIN : r;
-}
-
-static int fogged(int dr, int dc, float radius)
+static int fogged(int dr, int dc)
 {
     float du = (float)dc;
     float dv = (float)dr * FOG_VERTICAL;
-    return du * du + dv * dv > radius * radius * FOG_VERTICAL;
+    float d2 = du * du + dv * dv;
+    return d2 > FOG_RADIUS * FOG_RADIUS * FOG_VERTICAL;
 }
 
 /* View size follows the terminal: width is the terminal width minus the map
@@ -496,6 +489,8 @@ static void viewSize(int *w, int *h)
     int rows = caps_interactive() ? caps_rows() : UI_ROWS;
     *w = cols - 2;
     *h = rows - 10;
+    if (*w > VIEW_WIDTH) *w = VIEW_WIDTH;
+    if (*h > VIEW_HEIGHT) *h = VIEW_HEIGHT;
     if (*w < 11) *w = 11;
     if (*h < 7) *h = 7;
 }
@@ -548,11 +543,9 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
     int ax = st->posX - st->originX;
     int ay = st->posY - st->originY;
     int vw, vh, tx, ty;
-    float fog;
     int wid = caps_interactive() ? caps_cols() : UI_COLS;
 
     viewSize(&vw, &vh);
-    fog = fogRadius(vw, vh);
 
     if (!caps_interactive()) {
         clear_screen();
@@ -562,7 +555,7 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
                 if (ty == vh / 2 && tx == vw / 2) printf("P");
                 else drawCell(st->seed, area, trail, ay + dr, ax + dc,
                               st->posX + dc, st->posY + dr,
-                              fogged(dr, dc, fog), 0, 0, 0);
+                              fogged(dr, dc), 0, 0, 0);
             }
             printf("\n");
         }
@@ -583,7 +576,7 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
             else
                 drawCell(st->seed, area, trail, ay + dr, ax + dc,
                          st->posX + dc, st->posY + dr,
-                         fogged(dr, dc, fog), 1, srow, scol);
+                         fogged(dr, dc), 1, srow, scol);
         }
     }
     ui_panel(17, 0, wid, 5, "Status");
@@ -811,21 +804,12 @@ void runDungeon(Player *p, const Item catalog[], int catalogCount,
     memset(trail, ' ', sizeof trail);
 
     if (caps_interactive()) {
-        /* the intro sits in a panel just above the footer, so a tall terminal
-           does not leave an empty band between the text and the hint */
-        int cols = caps_cols();
-        int top = caps_rows() - 10;   /* panel bottom clears the footer row */
-
-        if (top < 3) top = 3;
         ui_frame("Dungeon");
-        ui_panel(top, 0, cols, 6, "Selamat datang");
-        render_text_clipped(top + 1, 2, cols - 4, ST_DIM,
-                            "Dunia dibangun dari seed %u. Masukkan seed ini lagi kapan saja "
-                            "untuk peta yang persis sama.", st.seed);
-        render_text_clipped(top + 2, 2, cols - 4, ST_DIM,
-                            "Jalan ke segala arah. Kumpulkan treasure ($), gold (G), chest (C), "
-                            "waspadai monster (M).");
-        render_text_clipped(top + 4, 2, cols - 4, ST_TEXT, "Tekan Enter untuk masuk.");
+        render_text(2, 0, ST_DIM,
+                    "Dunia dungeon dibangun dari seed %u. Masukkan seed ini lagi kapan saja untuk peta yang persis sama.", st.seed);
+        render_text(3, 0, ST_DIM,
+                    "Jalan ke segala arah. Kumpulkan treasure ($), lalu tekan Q kalau sudah puas.");
+        render_text(5, 0, ST_TEXT, "Tekan Enter untuk masuk:");
         ui_footer(NULL);
         ui_flush();
         {

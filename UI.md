@@ -614,10 +614,9 @@ Tekan Enter untuk masuk:
 
 Peta (`P` = pemain, `$` = treasure, `G` = gold, `C` = chest, `M` = monster,
 `*` = jalur hint BFS. Tembok digambar sebagai blok berwarna sesuai biome, dan
-hanya sel dalam radius fog dari pemain yang terlihat; fog ikut bergeser
-bersama pemain. Ukuran peta mengikuti terminal: lebar = lebar terminal - 2,
-tinggi = tinggi terminal - 10 (minimum 11x7), dan radius fog = 45% dari
-setengah sumbu terkecil (minimum 4), jadi terminal lebar melihat lebih jauh.)
+hanya sel dalam radius 6 dari pemain yang terlihat. Ukuran peta mengikuti
+terminal: lebar = lebar terminal - 2, tinggi = tinggi terminal - 10, dibatasi
+maksimum 25x15 dan minimum 11x7.)
 
 ```
 .#####.#####.#####.#####.
