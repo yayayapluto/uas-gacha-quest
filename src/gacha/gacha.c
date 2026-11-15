@@ -123,9 +123,10 @@ void gachaMenu(Player *p, const Item catalog[], int count)
 
     for (;;) {
         int choice;
-        ui_log_clear();
         choice = ui_menu_pick(items, nums, 3, 0, 2, gachaDraw, p);
         if (choice == 0) return;
+        /* clear only when a new pull is about to start, so the previous
+           result stays visible on the frame drawn before it */
         ui_log_clear();
         if (choice == 1) {
             if (p->gold < PULL_COST) {

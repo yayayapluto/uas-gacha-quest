@@ -77,7 +77,7 @@ static void battleDraw(void *ctx, int sel)
     start = ui_log_count() > 4 ? ui_log_count() - 4 : 0;
     logRow = 15;
     for (i = start; i < ui_log_count(); i++, logRow++)
-        render_text_clipped(logRow, 2, ui_log_style_at(i), UI_COLS - 4, "%s", ui_log_text(i));
+        render_text_clipped(logRow, 2, UI_COLS - 4, ui_log_style_at(i), "%s", ui_log_text(i));
 
     ui_menu_v(21, 0, items, nums, 4, sel);
     ui_footer(NULL);
