@@ -99,19 +99,20 @@ static void gachaDraw(void *ctx, int sel)
     ui_frame("Gacha");
     ui_status_panel_at(p, 2, 0, UI_COLS);
 
-    ui_panel(8, 0, 50, 5, "PULL");
+    ui_panel(8, 0, UI_COLS, 5, "PULL");
     snprintf(buf, sizeof buf, "Pity      : %d/%d", p->pity, PITY_THRESHOLD);
     render_text(9, 2, ST_TEXT, "%s", buf);
     snprintf(buf, sizeof buf, "Total pull: %d", p->totalPull);
     render_text(10, 2, ST_TEXT, "%s", buf);
     ui_bar(11, 2, 44, p->pity, PITY_THRESHOLD, ST_GOLD);
 
-    logRow = 14;
+    ui_panel(14, 0, UI_COLS, 6, "Hasil");
     start = ui_log_count() > 4 ? ui_log_count() - 4 : 0;
-    for (i = start; i < ui_log_count(); i++)
-        render_text(logRow++, 0, ui_log_style_at(i), "%s", ui_log_text(i));
+    logRow = 15;
+    for (i = start; i < ui_log_count(); i++, logRow++)
+        render_text_clipped(logRow, 2, UI_COLS - 4, ui_log_style_at(i), "%s", ui_log_text(i));
 
-    ui_menu_v(18, 0, items, nums, 3, sel);
+    ui_menu_v(21, 0, items, nums, 3, sel);
     ui_footer(NULL);
 }
 

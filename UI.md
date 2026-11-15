@@ -293,13 +293,22 @@ Baris HP memakai bar 10 sel: `#` terisi, `-` kosong. Warna bar ikut persentase H
 | HP musuh: 30                                   |
 | ATK 6 | DEF 0                                  |
 +------------------------------------------------+
-
++Log---------------------------------------------+
+| Potion dipakai, HP sekarang 100/100.           |
+| Goblin menyerang farras: 7 damage              |
+| farras menyerang Goblin: 9 damage              |
+| Goblin menyerang farras: 5 damage              |
++------------------------------------------------+
  1. Serang
  2. Bertahan
  3. Potion
  4. Kabur
 Aksi:
 ```
+
+Panel **Log** menampung 4 baris terakhir (log yang lebih lama dibuang). Teks
+yang lebih panjang dari dalam panel dipotong di kolom `UI_COLS - 4`, jadi
+tidak pernah menimpa garis tepi kanan.
 
 ### 6.1 Hasil aksi
 
@@ -367,13 +376,17 @@ Naik level! Sekarang level 2 (maxHp 120, ATK 13, DEF 5).
 | Pity    : 0/10                                 |
 | Total pull: 0                                  |
 +------------------------------------------------+
++Hasil-------------------------------------------+
+|   [Rare] Silver Aegis (power 12) -> baru!      |
+|   [Common] Wooden Sword -> DUPLIKAT, +20 gold  |
++------------------------------------------------+
  1. Pull 1x (100 gold)
  2. Pull 10x (900 gold)
  0. Kembali
 Pilih:
 ```
 
-Hasil pull (1x):
+Hasil pull (1x) — tampil di panel **Hasil**:
 
 ```
   [Rare] Storm Hammer (power 22) -> baru!

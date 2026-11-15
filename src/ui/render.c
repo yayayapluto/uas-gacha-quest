@@ -98,6 +98,12 @@ void render_char(int row, int col, Style s, unsigned int cp)
 
 int render_max_row(void) { return maxUsedRow; }
 
+unsigned int render_cell_cp(int row, int col)
+{
+    if (row < 0 || row >= GRID_MAX_ROWS || col < 0 || col >= GRID_MAX_COLS) return 0;
+    return grid[row][col].cp;
+}
+
 void render_text(int row, int col, Style s, const char *fmt, ...)
 {
     char buf[512];
@@ -123,6 +129,38 @@ void render_text(int row, int col, Style s, const char *fmt, ...)
         }
         cp = decodeCp(p, &adv);
         render_char(row, c, s, (unsigned int)cp);
+        c++;
+        p += adv;
+    }
+}
+
+/* Same as render_text but stops after maxW cells, so a long log line cannot
+   overwrite the border of the panel it is drawn in. */
+void render_text_clipped(int row, int col, int maxW, Style s, const char *fmt, ...)
+{
+    char buf[512];
+    va_list args;
+    const char *p;
+    int c = 0;
+
+    if (maxW <= 0) return;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof buf, fmt, args);
+    va_end(args);
+    for (p = buf; *p && c < maxW;) {
+        int adv, cp;
+        if (*p == '\033') {
+            const char *q = p + 1;
+            if (*q == '[') {
+                q++;
+                while (*q && !isalpha((unsigned char)*q)) q++;
+                if (*q) q++;
+                p = q;
+                continue;
+            }
+        }
+        cp = decodeCp(p, &adv);
+        render_char(row, col + c, s, (unsigned int)cp);
         c++;
         p += adv;
     }
