@@ -12,11 +12,11 @@ case "$CC" in
     export PATH
     ;;
 esac
-CFLAGS="-std=c99 -Wall -Wextra"
-INC="-Isrc/core -Isrc/util -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon"
+CFLAGS="-std=c11 -Wall -Wextra -Wpedantic"
+INC="-Isrc/core -Isrc/util -Isrc/ui -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon"
 CFLAGS="$CFLAGS $INC"
 SAN="${1:-}"
-LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c"
+LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c src/ui/render.c src/ui/widgets.c"
 
 PASS=0
 FAIL=0
@@ -81,11 +81,11 @@ driver "S15 leaderboard urut & top 10" bin/t_leaderboard
 
 driver "S01/S02 bacaAngka & bacaString" bin/t_util tests/in_util.txt
 
-skenario "S01 nama kosong/terlalu panjang" tests/in_s01.txt "Hub | AAAAAAAAAAAAAAAAAAAAAAAAAAAAA |"
+skenario "S01 nama kosong/terlalu panjang" tests/in_s01.txt "| Pemain : AAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 skenario "S02 input huruf pada menu" tests/in_s02.txt "Input tidak valid"
 skenario "S03 battle sampai menang" tests/in_s03.txt "Hadiah:"
 skenario "S04 battle sampai kalah" tests/in_s04.txt "Kamu dikalahkan"
-skenario "S05 gacha 10x gold kurang" tests/in_s05.txt "Gold kurang! Tarikan 10x butuh 900"
+skenario "S05 gacha 10x gold kurang" tests/in_s05.txt "Gold kurang! Pull 10x butuh 900"
 skenario "S09 jual item terpasang" tests/in_s09.txt "tidak bisa dijual"
 
 cp -f data/leaderboard.txt data/leaderboard.uji.bak

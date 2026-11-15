@@ -4,24 +4,41 @@
 #include "config.h"
 #include "inventory.h"
 #include "util.h"
+#include "ui.h"
+#include "render.h"
 
-/* Prints the inventory table with equipped markers. */
-static void showInventory(const Player *p)
+static void inventoryDraw(void *ctx, int sel)
 {
-    const char *rarityNames[] = { "-", "Common", "Rare", "Epic", "Legendary" };
-    int i;
+    static const char *items[] = { "Urutkan", "Cari item", "Equip item", "Kembali" };
+    static const int nums[] = { 1, 2, 3, 0 };
+    Player *p = ctx;
+    char buf[64];
+    int i, row;
 
-    printf("Inventory (%d/%d)\n", p->itemCount, MAX_ITEM);
-    printf("%-4s %-20s %-4s %-10s %-5s %s\n", "Idx", "Nama", "Tipe", "Rarity", "Power", "Terpasang");
-    for (i = 0; i < p->itemCount; i++) {
-        printf("%-4d %-20s %-4c %-10s %-5d %s\n",
-               i, p->inventory[i].name, p->inventory[i].type,
-               rarityNames[p->inventory[i].rarity], p->inventory[i].power,
-               i == p->weaponIndex ? "[SENJATA]" : (i == p->armorIndex ? "[ARMOR]" : ""));
+    ui_frame("Inventory");
+    ui_status_panel_at(p, 2, 0, UI_COLS);
+
+    snprintf(buf, sizeof buf, "Inventory (%d/%d)", p->itemCount, MAX_ITEM);
+    render_text(9, 0, ST_TITLE, "%s", buf);
+    render_text(10, 0, ST_DIM, "%-4s %-20s %-4s %-10s %-5s %s",
+                "Idx", "Nama", "Tipe", "Rarity", "Power", "Terpasang");
+    for (i = 0, row = 11; i < p->itemCount && i < 8; i++, row++) {
+        const char *eq = i == p->weaponIndex ? "[SENJATA]"
+                       : (i == p->armorIndex ? "[ARMOR]" : "");
+        render_text(row, 0, style_rarity(p->inventory[i].rarity),
+                    "%-4d %-20s %-4c %-10s %-5d %s",
+                    i, p->inventory[i].name, p->inventory[i].type,
+                    p->inventory[i].rarity == RARITY_COMMON ? "Common"
+                    : p->inventory[i].rarity == RARITY_RARE ? "Rare"
+                    : p->inventory[i].rarity == RARITY_EPIC ? "Epic"
+                    : "Legendary",
+                    p->inventory[i].power, eq);
     }
+
+    ui_menu_v(20, 2, items, nums, 4, sel);
+    ui_footer(NULL);
 }
 
-/* Re-locates equipped indexes after item positions change (sort or sell). */
 void syncEquipped(Player *p, int oldWeaponId, int oldArmorId)
 {
     int i;
@@ -33,26 +50,20 @@ void syncEquipped(Player *p, int oldWeaponId, int oldArmorId)
     }
 }
 
-/* Inventory menu: view, sort, search, equip. */
 void inventoryMenu(Player *p)
 {
-    int choice;
+    static const char *items[] = { "Urutkan", "Cari item", "Equip item", "Kembali" };
+    static const int nums[] = { 1, 2, 3, 0 };
 
     for (;;) {
-        printLine();
-        showInventory(p);
-        printf("=== Inventory ===\n");
-        printf("1. Urutkan\n");
-        printf("2. Cari item\n");
-        printf("3. Equip item\n");
-        printf("0. Kembali\n");
-        choice = readInt("Pilih: ", 0, 3);
+        int choice = ui_menu_pick(items, nums, 4, 0, 3, inventoryDraw, p);
         if (choice == 0) return;
         switch (choice) {
         case 1: {
-            int mode = readInt("Urutkan berdasarkan (1 rarity, 2 power, 3 nama): ", 1, 3);
+            int mode;
+            mode = readInt("Urutkan berdasarkan (1 rarity, 2 power, 3 nama): ", 1, 3);
             sortInventory(p, mode);
-            printf("Inventory terurut.\n");
+            set_message("Inventory terurut.");
             break;
         }
         case 2: {
@@ -60,31 +71,30 @@ void inventoryMenu(Player *p)
             int found;
             readString("Cari nama item: ", word, MAX_NAME);
             found = searchItemByName(p, word);
-            if (found == 0) printf("Tidak ada item yang cocok.\n");
-            else printf("Ditemukan %d item.\n", found);
+            if (found == 0) set_message("Tidak ada item yang cocok.");
+            else set_message("Ditemukan %d item.", found);
             break;
         }
         case 3: {
             int index;
             if (p->itemCount == 0) {
-                printf("Inventory kosong.\n");
+                set_message("Inventory kosong.");
                 break;
             }
             index = readInt("Nomor indeks item yang dipasang (999 batal): ", 0, 999);
             if (index == 999) break;
             if (index >= p->itemCount) {
-                printf("Indeks tidak ada di inventory.\n");
+                set_message("Indeks tidak ada di inventory.");
                 break;
             }
             equipItem(p, index);
-            printf("%s dipasang.\n", p->inventory[index].name);
+            set_message("%s dipasang.", p->inventory[index].name);
             break;
         }
         }
     }
 }
 
-/* Sorts the inventory: 1 rarity, 2 power descending, 3 name A-Z (case-insensitive). */
 void sortInventory(Player *p, int mode)
 {
     int oldWeaponId = -1, oldArmorId = -1;
@@ -121,7 +131,6 @@ void sortInventory(Player *p, int mode)
     syncEquipped(p, oldWeaponId, oldArmorId);
 }
 
-/* Finds items whose name contains 'word' (case-insensitive); prints them and returns the count. */
 int searchItemByName(const Player *p, const char *word)
 {
     char lowerWord[MAX_NAME];
@@ -136,15 +145,16 @@ int searchItemByName(const Player *p, const char *word)
         lowerName[MAX_NAME - 1] = '\0';
         for (k = 0; lowerName[k] != '\0'; k++) lowerName[k] = (char)tolower((unsigned char)lowerName[k]);
         if (strstr(lowerName, lowerWord) != NULL) {
-            printf("Ditemukan: idx %d %s (tipe %c, power %d)\n",
-                   i, p->inventory[i].name, p->inventory[i].type, p->inventory[i].power);
+            ui_log_style(style_rarity(p->inventory[i].rarity),
+                         "Ditemukan: idx %d %s (tipe %c, power %d)",
+                         i, p->inventory[i].name, p->inventory[i].type,
+                         p->inventory[i].power);
             found++;
         }
     }
     return found;
 }
 
-/* Equips the item into the weapon or armor slot, replacing the previous one. */
 void equipItem(Player *p, int index)
 {
     if (p->inventory[index].type == 'S') p->weaponIndex = index;

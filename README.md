@@ -2,6 +2,29 @@
 
 Mini RPG + Gacha berbasis CLI (Bahasa C) sesuai `docs/Projek UAS Daspro Gacha Quest 41774797398a802c9345c49291a6f695.md`.
 
+Catatan lengkap semua layar (tampilan, warna, pesan): `UI.md`.
+
+## Tampilan CLI (Redraw per Layar)
+
+Setiap layar (menu utama, Hub, Battle, Gacha, Inventory, Shop, Dungeon, Status,
+Leaderboard) digambar ulang dari awal lewat ANSI escape `\033[2J\033[H` yang
+dikelola satu fungsi `clear_screen()` di `src/ui/ui.c`. Saat startup `ui_init()`
+mengaktifkan Virtual Terminal Processing (Windows) dan code page UTF-8, jadi
+tanpa `system("cls")` dan tanpa teks lama menumpuk.
+
+- **Header panel.** Semua layar berbingkai panel 50 kolom (`draw_header`) yang
+  menampilkan nama pemain, level, skor, HP bar (`HP [########--] 80/100`,
+  hijau/kuning/merah sesuai persentase), gold (kuning), dan potion.
+- **Pesan terakhir.** Hasil aksi ("Gold kurang!...", "Dapat item X") disimpan
+  lewat `set_message()` dan dirender di slot tetap setelah redraw, jadi tidak
+  tertimpa clear. Warna: judul cyan, error merah, sukses/hijau, rarity
+  Legendary magenta / Epic kuning / Rare cyan.
+- **Pause.** Setelah hasil yang perlu dibaca (hasil gacha, ringkasan battle,
+  keluar dungeon) muncul "Tekan Enter untuk lanjut..." (`ui_wait_enter`); saat
+  stdin bukan terminal (input pipa), pause dilewati otomatis.
+- **Input tidak valid** (huruf, di luar rentang, kosong, EOF) menyebabkan layar
+  yang sama digambar ulang dengan pesan error, tanpa crash.
+
 ## Cara Kompilasi
 
 Butuh `gcc` (C99) dan `make` (GNU make).
@@ -78,6 +101,7 @@ menyimpan peta.
 | main.c | Menu utama dan loop hub game |
 | config.h | Konstanta dan struct Item, Monster, Player, Point, DungeonState |
 | util.c/.h | readInt, readString, readLine, clearScreen, printLine, shutdownGame |
+| ui.c/.h | Lapisan tampilan: clear_screen, draw_header, HP bar, warna ANSI, pesan terakhir, ui_wait_enter |
 | player.c/.h | initPlayer, addExp, totalAtk/totalDef, showStatus |
 | battle.c/.h | startBattle, calculateDamage |
 | gacha.c/.h | gachaMenu, rollRarity, findItemInInventory, pullOnce |
