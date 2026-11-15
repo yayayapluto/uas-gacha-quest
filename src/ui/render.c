@@ -6,6 +6,7 @@
 #include "render.h"
 #include "caps.h"
 #include "term.h"
+#include "widgets.h"
 
 static Cell grid[GRID_MAX_ROWS][GRID_MAX_COLS];
 static char outBuf[32 * 1024];
@@ -86,6 +87,7 @@ void render_clear(void)
             grid[r][c].st = ST_TEXT;
         }
     maxUsedRow = -1;
+    widget_footer_reset();
 }
 
 void render_char(int row, int col, Style s, unsigned int cp)

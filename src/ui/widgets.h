@@ -11,6 +11,7 @@ void widget_menu_v(int row, int col, const char *const *items, const int *nums,
 void widget_menu_h(int row, int col, const char *const *items, const int *nums,
                    int n, int sel);
 void widget_footer(const char *extra);
+void widget_footer_reset(void);   /* new frame: footer may pick a new row */
 void widget_msg(int row, int col, int w, const char *msg);
 
 #endif
