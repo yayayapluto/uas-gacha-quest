@@ -88,23 +88,21 @@ void widget_menu_h(int row, int col, const char *const *items, const int *nums,
     }
 }
 
-/* The footer is a property of the frame, not of the caller: menu pickers and
-   screens both ask for it, so it is drawn once at a fixed grid row. Drawing it
-   relative to render_max_row() made the second call stack a duplicate line. */
-/* pinned to the bottom of the real terminal, not the baseline layout height */
-#define FOOTER_ROW footerRow()
-static int footerRow(void)
-{
-    int r = caps_rows() - 1;
-    return r < 1 ? UI_ROWS - 1 : r;
-}
+/* The footer belongs to the frame: it sits one row below the content drawn so
+   far. Screens and menu pickers both draw it, so the row is remembered and
+   repeated calls overwrite it instead of stacking a second line. */
+static int footerRow = -1;
+
+void widget_footer_reset(void) { footerRow = -1; }
 
 void widget_footer(const char *extra)
 {
     char buf[192];
+    int row = footerRow >= 0 ? footerRow : render_max_row() + 2;
     snprintf(buf, sizeof buf, "%s pilih  Enter konfirmasi  Esc kembali%s%s",
              caps_glyphs()->arrowUD, extra != NULL ? "  " : "", extra != NULL ? extra : "");
-    render_text(FOOTER_ROW, 0, ST_DIM, "%s", buf);
+    render_text(row, 0, ST_DIM, "%s", buf);
+    footerRow = row;
 }
 
 void widget_msg(int row, int col, int w, const char *msg)
