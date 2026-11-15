@@ -34,6 +34,16 @@ tanpa `system("cls")` dan tanpa teks lama menumpuk.
   stdin bukan terminal (input pipa), pause dilewati otomatis.
 - **Input tidak valid** (huruf, di luar rentang, kosong, EOF) menyebabkan layar
   yang sama digambar ulang dengan pesan error, tanpa crash.
+- **Arsitektur render.** Setiap layar adalah grid sel (`Cell`: codepoint + gaya)
+  yang digambar ke frame buffer, lalu `render_flush()` menuliskannya sekali:
+  mode interaktif memakai cursor positioning + warna per run, mode fallback
+  mencetak baris polos. Semua teks lolos `render_text`/`render_text_clipped`
+  (berhenti di lebar maksimum, tidak pernah menimpa border) dan satu baris bisa
+  mencampur beberapa gaya lewat `render_span`.
+- **Log aksi berwarna.** Battle, gacha, shop, dan inventory menulis ke log yang
+  disimpan sebagai segmen bergaya (aktor, aksi, target, nilai — masing-masing
+  dengan warnanya sendiri): pemain aksen, monster merah, damage gold, teks
+  netral. Log digambar di panel `Log`/`Hasil` masing-masing layar.
 
 ## Cara Kompilasi
 
@@ -92,6 +102,10 @@ Aturan yang berlaku di semua terminal:
   (kursor tampil, echo hidup, alternate screen keluar), autosave terakhir
   ditulis, lalu `data/session.lock` ditandai `CLEAN`. Crash (segmentasi,
   abort) juga memulihkan terminal dan menambah satu baris di `data/crash.log`.
+- **RNG yang bisa disimpan.** Semua keacakan gameplay memakai xorshift64*
+  (`plat_rand`), bukan `rand()` libc, karena state-nya ikut snapshot autosave.
+  Sesi yang dipulihkan melanjutkan urutan acak yang sama persis seperti sebelum
+  crash — gacha, battle, dan loot chest tidak "mengulang dadu".
 - **Autosave:** thread latar menulis `data/autosave.dat` setiap aksi (debounce
   1500 ms, `GACHA_AUTOSAVE_MS` untuk mengubah, minimal 200). Kejadian penting
   (akhir battle, hasil gacha, jual/beli, treasure, equip) langsung ditulis.
@@ -146,12 +160,17 @@ bin/game          (Linux: ./bin/game)
    8 Epic, 4 Legendary. Rarity: Common/Rare/Epic/Legendary; pity dijamin Epic
    setelah 10 tarikan tanpa Epic+. Item duplikat otomatis jadi gold.
 4. **Inventory** (hub menu 3) → lihat, urutkan (rarity/power/nama), cari, equip.
-5. **Shop** (hub menu 4) → beli potion (40 gold, maks 20), jual item.
+5. **Shop** (hub menu 4) → tampil sebagai daftar produk (nama, harga, stok)
+   dengan panel `Detail` untuk baris terpilih. Beli potion (40 gold, maks 20),
+   atau Jual item: layar `Jual Item` menampilkan inventory dengan warna rarity,
+   item terpasang ditandai dan tidak bisa dijual.
 6. **Dungeon** (hub menu 5) → dunia prosedural tak berujung dari seed, gerak
    WASD, `$` = treasure (+30 gold), H = hint BFS ke treasure terdekat
    (30 gold, maks 3x), Q = keluar. Rincian di bagian berikut.
-7. **Simpan** (hub menu 7) atau Kembali ke menu utama (dipaksa menawarkan simpan,
-   lalu skor dicatat ke leaderboard).
+7. **Simpan** (hub menu 7) → picker 5 slot: pilih slot kosong, timpa slot
+   terisi (nama pemainnya tampil), atau "Buat save baru" yang menunjuk slot
+   kosong pertama. Kembali ke menu utama juga menawarkan simpan, lalu skor
+   dicatat ke leaderboard.
 8. Menu utama **Load Game** menampilkan 5 save slot (nama pemain tiap slot) dan
    memuat slot yang dipilih; **Leaderboard** menampilkan top 5.
 
