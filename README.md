@@ -69,6 +69,8 @@ Aturan yang berlaku di semua terminal:
   `0-9` langsung memilih item; `Esc`/`Q` kembali.
 - **Dungeon:** `W`/`A`/`S`/`D` atau panah untuk jalan langsung tanpa Enter,
   `H` hint (30 gold), `Q` keluar.
+- **Build + main:** `make start` (compile semua lalu jalankan `bin/game`);
+  `make` saja hanya membangun.
 - **Ctrl+C / kill / terminal ditutup aman:** handler sinyal memulihkan terminal
   (kursor tampil, echo hidup, alternate screen keluar), autosave terakhir
   ditulis, lalu `data/session.lock` ditandai `CLEAN`. Crash (segmentasi,

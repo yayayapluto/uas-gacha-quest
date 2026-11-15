@@ -30,13 +30,19 @@ else
 CC_SAN = $(CC)
 endif
 
-.PHONY: all clean test debug preview
+.PHONY: all clean test debug preview start
 .DEFAULT_GOAL := all
 
 preview: $(BIN)/ui_preview
 	$(BIN)/ui_preview
 
 all: $(BIN)/game
+
+# Build everything, then play. The game detects the terminal itself
+# (truecolor/256/16/mono, UTF-8 glyphs, interactive vs piped); override with
+# GACHA_COLOR=truecolor|256|16|mono or NO_COLOR=1 when the guess is wrong.
+start: all
+	$(BIN)/game
 
 $(BIN)/game: $(MODUL)
 	@mkdir -p $(BIN)
