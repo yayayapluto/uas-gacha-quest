@@ -1,30 +1,145 @@
 # UI.md — Semua Layar Game Gacha Quest
 
-Dokumen ini mencatat setiap layar/UI yang ada di game. Semua output diambil dari
-hasil run game sungguhan (ANSI di-strip, jadi warna tidak terlihat di blok kode).
+Dokumen ini mencatat setiap layar/UI yang ada di game. Semua teks pesan (bahasa
+Indonesia) dipertahankan persis; yang berubah hanya tata letak dan warna. Output
+di blok kode adalah hasil run sungguhan dengan kode ANSI di-strip.
 
-## Aturan tampilan
+## Arsitektur lapisan UI
 
-| Aturan | Nilai | Sumber |
-|---|---|---|
-| Lebar box | 50 karakter | `UI_WIDTH` di `src/ui/ui.h:6` |
-| Bentuk box | `+` di corners, `-` di garis atas/bawah, `\|` di sisi | `src/ui/ui.c` (`draw_box_top`, `draw_box_bottom`, `draw_box_line`) |
-| Padding baris | `\| ` + isi + spasi + ` \|` | `draw_box_line` |
-| Panjang baris dihitung tanpa kode ANSI | `visible_len()` | `src/ui/ui.c:64` |
-| Judul box | Tempel di garis atas, sisanya `-` | `draw_box_top` |
+Modul di `src/ui/`, terpisah dari logika game:
 
-### Warna (ANSI)
+| File | Tanggung jawab |
+|---|---|
+| `term.c/h` | Lapisan platform: raw mode, ukuran terminal, baca tombol, alternate screen, kursor, restore saat keluar. |
+| `caps.c/h` | Deteksi kemampuan: mode warna, Unicode, ukuran, interaktif/TTY. |
+| `style.c/h` | Token warna semantik → escape ANSI sesuai mode. |
+| `render.c/h` | Frame buffer grid; semua gambar ditulis ke buffer lalu dikirim **satu write per frame**. |
+| `widgets.c/h` | Panel, tabel/menu ter-highlight, bar HP/EXP, footer hint, kotak pesan/log. |
+| `ui.c/h` | API publik yang dipakai layar game. |
 
-| Kode | Warna | Dipakai untuk |
-|---|---|---|
-| `ANSI_CYAN` | cyan | Judul box, pesan sistem, border |
-| `ANSI_GREEN` | hijau | HP > 60%, pesan menang |
-| `ANSI_YELLOW` | kuning | HP 31-60%, angka gold, rarity Epic |
-| `ANSI_RED` | merah | HP <= 30%, pesan kalah |
-| `ANSI_MAGENTA` | magenta | rarity Legendary |
-| `ANSI_DIM` | redup | teks petunjuk, intro dungeon |
+Setiap layar di-redraw penuh: layar dibersihkan di grid, frame baru digambar,
+lalu menunggu input. Tidak ada lagi output yang menumpuk ke bawah.
+
+## Geometri dan layout
+
+| Aturan | Nilai |
+|---|---|
+| Lebar konten | 78 kolom (`UI_COLS`), dipusatkan horizontal bila terminal lebih lebar |
+| Tinggi konten | 24 baris (`UI_ROWS`) |
+| Ukuran minimum | 80x24; bila lebih kecil tampil "Perbesar terminal (min 80x24)" |
+| Baris judul | "Gacha Quest" kiri, nama layar kanan (aksen) |
+| Panel status pemain | nama, level, bar HP, gold, potion — di hub/battle/gacha/inventory/shop/status |
+| Panel pesan sistem | 1-5 baris terakhir menggantikan printf di tengah layar |
+| Footer | petunjuk tombol: "↑↓ pilih  Enter konfirmasi  Esc kembali" |
+| Bar HP/EXP | `█` terisi, `░` kosong (ASCII: `#` dan `-`) |
+
+## Deteksi kemampuan (deteksi, bukan tebak)
+
+### Warna
+
+| Kondisi | Mode |
+|---|---|
+| Bukan TTY, atau `NO_COLOR` ada, atau `TERM=dumb` | mono (tanpa ANSI) |
+| `COLORTERM` mengandung `truecolor`/`24bit` | truecolor `\x1b[38;2;R;G;Bm` |
+| `TERM` mengandung `256color` | 256 warna `\x1b[38;5;Nm` (kubus 6x6x6 + grayscale) |
+| Selain itu | 16 warna ANSI (RGB → warna terdekat) |
+| Windows 10+ | `ENABLE_VIRTUAL_TERMINAL_PROCESSING`; gagal → mono |
+
+### Karakter (glyph)
+
+| Kondisi | Hasil |
+|---|---|
+| locale (`LC_ALL`/`LC_CTYPE`/`LANG`) mengandung `UTF-8`/`utf8` dan `TERM` ≠ `linux`/`dumb` | Unicode: `┌ ┐ └ ┘ ─ │ ├ ┤ █ ░` |
+| Selain itu | ASCII: `+ - | #` |
+| Windows + konsol VT | `SetConsoleOutputCP(CP_UTF8)`, default Unicode |
+
+Unicode hanya memakai garis tipis + blok; tanpa emoji, sudut rounded, atau
+karakter lebar-ganda (CJK) agar perataan kolom tidak rusak. Semua karakter
+diambil dari tabel `Glyphs` (varian unicode & ascii), tidak ada border
+hardcode di layar.
+
+### Override lewat environment
+
+| Env | Efek |
+|---|---|
+| `GACHA_COLOR=mono\|16\|256\|truecolor` | paksa mode warna |
+| `GACHA_ASCII=1` | paksa ASCII |
+| `GACHA_UNICODE=1` | paksa Unicode |
+| `GACHA_TTY=1` | hook uji: anggap stdout terminal (tanpa TTY nyata) |
+
+### Input
+
+- POSIX raw mode (`tcgetattr`/`tcsetattr`, ICANON & ECHO mati, VMIN=1).
+  Windows: `SetConsoleMode` + `_getch` (prefix 0xE0).
+- Tombol: panah atas/bawah (`ESC [ A/B`, juga `ESC O A/B`), `W`/`S`, `K`/`J`,
+  Enter, angka 0-9 sebagai shortcut item menu, `Esc`/`Q` kembali.
+- ESC tunggal dibedakan dari urutan panah dengan timeout singkat (poll ~40 ms).
+- Menu: item terpilih di-highlight (warna latar + penanda `▸ `/`> `), wrap-around.
+- Layar yang butuh teks (nama, seed, cari item, jumlah potion) sementara balik
+  ke mode cooked (baris) lalu raw lagi; validasi lama dipertahankan.
+- Restore terminal dijamin: `atexit()` + handler `SIGINT`/`SIGTERM`/`SIGHUP`/
+  `SIGTSTP`/`SIGCONT` (POSIX). Setelah keluar/crash: kursor tampil, echo hidup,
+  keluar alternate screen, warna reset.
+
+### Mode non-interaktif (fallback)
+
+Bila stdin atau stdout bukan TTY: tanpa raw mode, tanpa alternate screen, tanpa
+clear screen, tanpa warna, ASCII, dan input baris seperti versi lama (termasuk
+pesan EOF). Perilaku fallback identik dengan versi sebelumnya sehingga test lama
+tetap lulus.
+
+## Palet semantik
+
+Token, bukan warna per layar (`style.h`). Nilai RGB awal:
+
+| Token | Warna |
+|---|---|
+| accent | #5FB3FF |
+| border | #4A5568 |
+| text | #E2E8F0 |
+| dim | #718096 |
+| hp_good / success | #48BB78 |
+| hp_mid | #ECC94B |
+| hp_low / danger | #F56565 |
+| gold | #F6C453 |
+| rarity common | #A0AEC0 |
+| rarity rare | #4299E1 |
+| rarity epic | #ECC94B |
+| rarity legendary | #D53F8C |
+| selected_bg | #2D3748 (teks accent) |
+
+Bar HP: truecolor mewarnai tiap sel dengan gradien halus; 256/16 memakai satu
+warna per ambang (hijau >60%, kuning 31-60%, merah ≤30%); mono terbaca dari
+karakter `█`/`░` saja. Info penting selalu disertai teks/simbol (mis. tag
+`[Epic]`), bukan warna saja, agar tetap terbaca di mode mono.
+
+## Tangkapan layar (ASCII, ANSI-stripped)
+
+Contoh frame showcase widget (panel, bar HP tiga ambang, menu ter-highlight):
+
+```
+Gacha Quest                                                          Preview
++Panel-----------------------------------------------------------------------+
+| text         title        accent       border       dim          gold      |
+| danger       success      common       rare         epic         legendary |
+|                                                                            |
+|  ###########-------      ########----------      ##----------------        |
+|                                                                            |
+|  ###########-----------------          ###################---------        |
++----------------------------------------------------------------------------+
+  > 1. Pilihan dua
+    2. Pilihan tiga
+```
+
+## Kode ANSI (legacy)
+
+Teks pesan per layar di bawah ini tetap sama persis; tata letaknya kini memakai
+panel/bar berwarna di atas. Nilai ANSI lama (`ANSI_CYAN`, `ANSI_RED`, dst.)
+masih tersedia di `ui.h` untuk kompatibilitas tetapi layar baru memakai token
+`Style`.
 
 ---
+
 
 ## 1. Menu Utama
 
@@ -480,3 +595,23 @@ Input berakhir (EOF).
 | Status | `src/player/player.c` (`showStatus`) |
 | Dungeon | `src/dungeon/dungeon.c` |
 | Simpan/muat, Leaderboard | `src/storage/storage.c` |
+
+---
+
+## Keputusan desain (ambiguitas → pilihan aman)
+
+1. **Fallback identik.** Saat non-TTY, semua layar memakai jalur lama (printf /
+   input baris, ASCII, tanpa clear/alternate screen). Ini menjaga test lama dan
+   pemakaian pipa tetap lulus.
+2. **Windows Unicode default.** Di konsol Windows dengan VT aktif, mode
+   interaktif + berwarna memaksa Unicode (`SetConsoleOutputCP(CP_UTF8)`) karena
+   konsol Windows mendukung UTF-8 walau `LANG` tidak diset. `GACHA_ASCII=1`
+   tetap bisa memaksa ASCII. Aturan `LANG` (C→ASCII, UTF-8→Unicode) berlaku penuh
+   di POSIX dan di Windows sebelum VT aktif.
+3. **Lebar tetap 78 kolom, dipusatkan.** Lebih aman untuk perataan tabel
+   (inventory/shop/leaderboard) daripada layout penuh selebar terminal.
+4. **q/ESC pada dungeon langsung keluar** (bukan prompt), sesuai perilaku lama
+   "Q keluar"; tidak menambah langkah konfirmasi.
+5. **Pesan EOF non-interaktif** dipertahankan persis ("Input berakhir (EOF)...").
+6. **Bar HP mono** mengandalkan `█`/`░`; ambang warna tidak dipakai agar tetap
+   konsisten terbaca tanpa warna.

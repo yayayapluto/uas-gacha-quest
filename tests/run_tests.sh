@@ -12,11 +12,11 @@ case "$CC" in
     export PATH
     ;;
 esac
-CFLAGS="-std=c99 -Wall -Wextra"
+CFLAGS="-std=c11 -Wall -Wextra -Wpedantic"
 INC="-Isrc/core -Isrc/util -Isrc/ui -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon"
 CFLAGS="$CFLAGS $INC"
 SAN="${1:-}"
-LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c src/ui/ui.c"
+LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c src/ui/render.c src/ui/widgets.c"
 
 PASS=0
 FAIL=0
