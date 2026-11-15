@@ -172,12 +172,43 @@ Pilih:
 
 ## 2. Game Baru — input nama & seed
 
+Interaktif: nama dan seed ditanyakan sebagai **dua langkah terpisah**, masing-masing
+dengan frame input sendiri (header `GACHA QUEST · Game Baru`, panel label, prompt
+`> ` berwarna accent, footer `Enter konfirmasi  Esc batal`). Prompt selalu di baris 4
+dari atas, tidak tergantung ukuran terminal. Error validasi tampil di baris tepat di
+bawah prompt (warna danger) lalu frame digambar ulang.
+
 ```
-Pilih: Masukkan nama pemain: Seed dunia (Enter saja untuk acak): Seed acak dipilih: 1794728246
+GACHA QUEST · Game Baru
++Input-------------------------------------------+
+| Masukkan nama pemain (maks 29 karakter):       |
+| >                                              |
++------------------------------------------------+
+
+Enter konfirmasi  Esc batal
+```
+
+lalu langkah seed:
+
+```
+GACHA QUEST · Game Baru
++Input-------------------------------------------+
+| Seed dunia (Enter saja untuk acak):            |
+| >                                              |
++------------------------------------------------+
+
+Enter konfirmasi  Esc batal
 ```
 
 Seed dikosongkan -> `Seed acak dipilih: <angka>`. Seed diisi angka -> dipakai apa adanya.
 Seed tidak valid -> `Seed harus angka bulat 0 sampai 4294967295.`
+
+Mode non-interaktif (stdin pipe) tetap satu baris prompt polos tanpa escape code,
+seperti versi lama:
+
+```
+Pilih: Masukkan nama pemain (maks 29 karakter): Seed dunia (Enter saja untuk acak): Seed acak dipilih: 1794728246
+```
 
 Pesan sambutan:
 

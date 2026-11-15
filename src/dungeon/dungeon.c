@@ -306,16 +306,48 @@ unsigned int promptWorldSeed(void)
 {
     char line[32];
 
+    if (!caps_interactive()) {
+        for (;;) {
+            printf("Seed dunia (Enter saja untuk acak): ");
+            if (!readLine(line, sizeof line)) {
+                unsigned int seed = randomWorldSeed();
+                printf("\nSeed acak dipilih: %u\n", seed);
+                return seed;
+            }
+            if (line[0] == '\0') {
+                unsigned int seed = randomWorldSeed();
+                printf("Seed acak dipilih: %u\n", seed);
+                return seed;
+            }
+            {
+                char *end;
+                unsigned long value;
+                errno = 0;
+                value = strtoul(line, &end, 10);
+                while (*end != '\0' && isspace((unsigned char)*end)) end++;
+                if (line[0] == '-' || *end != '\0' || errno == ERANGE || value > 4294967295UL) {
+                    printf("Seed harus angka bulat 0 sampai 4294967295.\n");
+                    continue;
+                }
+                return (unsigned int)value;
+            }
+        }
+    }
+
+    ui_input_screen("Game Baru");
     for (;;) {
-        printf("Seed dunia (Enter saja untuk acak): ");
+        unsigned int seed;
+        ui_line_begin("Seed dunia (Enter saja untuk acak):");
         if (!readLine(line, sizeof line)) {
-            unsigned int seed = randomWorldSeed();
-            printf("\nSeed acak dipilih: %u\n", seed);
+            seed = randomWorldSeed();
+            ui_line_note("Seed acak dipilih: %u", seed);
+            ui_line_end();
             return seed;
         }
         if (line[0] == '\0') {
-            unsigned int seed = randomWorldSeed();
-            printf("Seed acak dipilih: %u\n", seed);
+            seed = randomWorldSeed();
+            ui_line_note("Seed acak dipilih: %u", seed);
+            ui_line_end();
             return seed;
         }
         {
@@ -325,9 +357,10 @@ unsigned int promptWorldSeed(void)
             value = strtoul(line, &end, 10);
             while (*end != '\0' && isspace((unsigned char)*end)) end++;
             if (line[0] == '-' || *end != '\0' || errno == ERANGE || value > 4294967295UL) {
-                printf("Seed harus angka bulat 0 sampai 4294967295.\n");
+                ui_line_error("Seed harus angka bulat 0 sampai 4294967295.");
                 continue;
             }
+            ui_line_end();
             return (unsigned int)value;
         }
     }

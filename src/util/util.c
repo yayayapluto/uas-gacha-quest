@@ -19,9 +19,9 @@ int readInt(const char *prompt, int min, int max)
     char *end;
     long value;
 
-    ui_line_begin();
+    ui_line_begin("%s", prompt);
     for (;;) {
-        ui_line_prompt("%s", prompt);
+        ui_line_prompt();
         if (!readLine(buf, sizeof buf)) {
             ui_line_error("Input berakhir (EOF), memakai nilai %d.", min);
             break;
@@ -51,9 +51,9 @@ void readString(const char *prompt, char *out, int max)
 {
     char buf[256];
     out[0] = '\0';
-    ui_line_begin();
+    ui_line_begin("%s", prompt);
     for (;;) {
-        ui_line_prompt("%s", prompt);
+        ui_line_prompt();
         if (!readLine(buf, sizeof buf)) {
             ui_line_error("Input berakhir (EOF).");
             break;

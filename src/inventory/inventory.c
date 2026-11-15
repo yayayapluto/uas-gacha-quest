@@ -55,6 +55,7 @@ void inventoryMenu(Player *p)
     static const char *items[] = { "Urutkan", "Cari item", "Equip item", "Kembali" };
     static const int nums[] = { 1, 2, 3, 0 };
 
+    ui_input_screen("Inventory");
     for (;;) {
         int choice = ui_menu_pick(items, nums, 4, 0, 3, inventoryDraw, p);
         if (choice == 0) return;

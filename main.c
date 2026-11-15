@@ -76,6 +76,7 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
         case 0: {
             char answer[MAX_NAME];
             if (!saved) {
+                ui_input_screen("Hub");
                 readString("Simpan sebelum keluar? (y/n): ", answer, MAX_NAME);
                 if (answer[0] == 'y' || answer[0] == 'Y') saveGame(p);
             }
@@ -115,10 +116,11 @@ int main(void)
         switch (choice) {
         case 1: {
             char name[MAX_NAME];
-            readString("Masukkan nama pemain: ", name, MAX_NAME);
+            ui_input_screen("Game Baru");
+            readString("Masukkan nama pemain (maks 29 karakter): ", name, MAX_NAME);
             initPlayer(&player, name);
-            set_message("Selamat datang, %s! Kamu dapat 200 gold.", player.name);
             player.seed = promptWorldSeed();
+            set_message("Selamat datang, %s! Kamu dapat 200 gold.", player.name);
             runHub(&player, catalog, catalogCount, monsters, monsterCount);
             break;
         }

@@ -38,11 +38,15 @@ void ui_status_panel_at(const Player *p, int row, int col, int w);
 int ui_menu_pick(const char *const *items, const int *nums, int n,
                  int minNum, int maxNum, UiDrawFn draw, void *ctx);
 
-/* Line prompts: cooked input with cursor visible in interactive mode. */
-void ui_line_begin(void);
+/* Line prompts: each prompt gets its own input frame (header + panel + "> "
+   prompt); the cursor is placed right after the prompt, computed from the
+   drawn frame, never from the terminal size. */
+void ui_input_screen(const char *name);      /* header title for the next prompt */
+void ui_line_begin(const char *fmt, ...);    /* draw input frame, enter cooked mode */
 void ui_line_end(void);
-void ui_line_prompt(const char *fmt, ...);
-void ui_line_error(const char *fmt, ...);
+void ui_line_prompt(void);                   /* reposition cursor at the prompt */
+void ui_line_error(const char *fmt, ...);    /* redraw frame + danger line below prompt */
+void ui_line_note(const char *fmt, ...);     /* result line below the prompt */
 
 /* Row picker for tables (inventory equip / shop sell). Returns index or -1. */
 int ui_pick_row(int count, UiDrawFn draw, void *ctx);

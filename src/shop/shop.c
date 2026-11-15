@@ -26,6 +26,7 @@ void shopMenu(Player *p)
     static const char *items[] = { "Beli potion (40 gold)", "Jual item", "Kembali" };
     static const int nums[] = { 1, 2, 0 };
 
+    ui_input_screen("Shop");
     for (;;) {
         int choice = ui_menu_pick(items, nums, 3, 0, 2, shopDraw, p);
         if (choice == 0) return;
