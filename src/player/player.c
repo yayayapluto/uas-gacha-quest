@@ -3,6 +3,7 @@
 #include "config.h"
 #include "player.h"
 #include "util.h"
+#include "ui.h"
 
 /* Fills a new player with the starting values from rule 6.1. */
 void initPlayer(Player *p, const char *name)
@@ -41,8 +42,8 @@ void addExp(Player *p, int exp)
         p->atk += 2;
         p->def += 1;
         p->hp = p->maxHp;
-        printf("Naik level! Sekarang level %d (maxHp %d, ATK %d, DEF %d).\n",
-               p->level, p->maxHp, p->atk, p->def);
+        set_message("Naik level! Sekarang level %d (maxHp %d, ATK %d, DEF %d).",
+                    p->level, p->maxHp, p->atk, p->def);
     }
     if (p->level >= MAX_LEVEL) p->exp = 0;
 }
@@ -64,27 +65,27 @@ int totalDef(const Player *p)
 /* Shows the full player status. */
 void showStatus(const Player *p)
 {
-    printf("=== Status ===\n");
-    printf("Nama       : %s\n", p->name);
-    printf("Level      : %d (EXP %d/%d)\n",
-           p->level, p->exp, p->level >= MAX_LEVEL ? 0 : p->level * 50);
-    printf("HP         : %d/%d\n", p->hp, p->maxHp);
-    printf("ATK        : %d", totalAtk(p));
+    clear_screen();
+    draw_header("STATUS", p);
+    draw_box_top("DETAIL");
+    draw_box_line("Level      : %d (EXP %d/%d)", p->level, p->exp, p->level >= MAX_LEVEL ? 0 : p->level * 50);
+    draw_box_line("ATK        : %d", totalAtk(p));
+    draw_box_line("DEF        : %d", totalDef(p));
+    draw_box_line("Potion     : %d", p->potion);
+    draw_box_line("Pity       : %d/%d", p->pity, PITY_THRESHOLD);
+    draw_box_line("Total pull : %d", p->totalPull);
+    draw_box_line("Seed dunia : %u", p->seed);
+    draw_box_line("Item       : %d/%d", p->itemCount, MAX_ITEM);
+    draw_box_bottom();
     if (p->weaponIndex >= 0)
-        printf(" (%d + %d %s)", p->atk, p->inventory[p->weaponIndex].power, p->inventory[p->weaponIndex].name);
-    printf("\n");
-    printf("DEF        : %d", totalDef(p));
+        printf("Senjata: %s%s%s (power %d)\n",
+               rarity_color(p->inventory[p->weaponIndex].rarity),
+               p->inventory[p->weaponIndex].name, ANSI_RESET,
+               p->inventory[p->weaponIndex].power);
     if (p->armorIndex >= 0)
-        printf(" (%d + %d %s)", p->def, p->inventory[p->armorIndex].power, p->inventory[p->armorIndex].name);
-    printf("\n");
-    printf("Gold       : %d\n", p->gold);
-    printf("Potion     : %d\n", p->potion);
-    printf("Pity       : %d/%d\n", p->pity, PITY_THRESHOLD);
-    printf("Total pull : %d\n", p->totalPull);
-    printf("Skor       : %d\n", p->score);
-    printf("Seed dunia : %u\n", p->seed);
-    printf("Item       : %d/%d", p->itemCount, MAX_ITEM);
-    if (p->weaponIndex >= 0) printf(" | Senjata: %s", p->inventory[p->weaponIndex].name);
-    if (p->armorIndex >= 0) printf(" | Armor: %s", p->inventory[p->armorIndex].name);
-    printf("\n");
+        printf("Armor  : %s%s%s (power %d)\n",
+               rarity_color(p->inventory[p->armorIndex].rarity),
+               p->inventory[p->armorIndex].name, ANSI_RESET,
+               p->inventory[p->armorIndex].power);
+    ui_wait_enter("Tekan Enter untuk lanjut...");
 }

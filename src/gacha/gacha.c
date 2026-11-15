@@ -3,6 +3,7 @@
 #include "config.h"
 #include "gacha.h"
 #include "util.h"
+#include "ui.h"
 
 const char *rarityName(int rarity)
 {
@@ -75,11 +76,15 @@ void pullOnce(Player *p, const Item catalog[], int count, int rarity)
     if (index >= 0) {
         int price = duplicatePrice(candidates[picked].rarity);
         p->gold += price;
-        printf("  [%s] %s -> DUPLIKAT, jadi +%d gold\n", rarityName(rarity), candidates[picked].name, price);
+        printf("  [%s%s%s] %s -> DUPLIKAT, jadi +%d gold\n",
+               rarity_color(rarity), rarityName(rarity), ANSI_RESET,
+               candidates[picked].name, price);
     } else if (p->itemCount < MAX_ITEM) {
         p->inventory[p->itemCount] = candidates[picked];
         p->itemCount++;
-        printf("  [%s] %s (power %d) -> baru!\n", rarityName(rarity), candidates[picked].name, candidates[picked].power);
+        printf("  [%s%s%s] %s (power %d) -> baru!\n",
+               rarity_color(rarity), rarityName(rarity), ANSI_RESET,
+               candidates[picked].name, candidates[picked].power);
     }
 }
 
@@ -89,17 +94,24 @@ void gachaMenu(Player *p, const Item catalog[], int count)
     int choice;
 
     for (;;) {
-        printLine();
-        printf("=== Gacha ===\n");
-        printf("Gold: %d | Pity: %d/%d | Total pull: %d\n", p->gold, p->pity, PITY_THRESHOLD, p->totalPull);
-        printf("1. Tarikan 1x (%d gold)\n", PULL_COST);
-        printf("2. Tarikan 10x (%d gold)\n", PULL10_COST);
-        printf("0. Kembali\n");
-        choice = readInt("Pilih: ", 0, 2);
+        clear_screen();
+        draw_header("GACHA", p);
+        draw_box_top("PULL");
+        draw_box_line("Pity    : %d/%d", p->pity, PITY_THRESHOLD);
+        draw_box_line("Total pull: %d", p->totalPull);
+        draw_box_bottom();
+        draw_menu(1, "Pull 1x (100 gold)");
+        draw_menu(2, "Pull 10x (900 gold)");
+        draw_menu(0, "Kembali");
+        if (last_message()[0] != '\0')
+            printf("%s%s%s\n", ANSI_CYAN, last_message(), ANSI_RESET);
+        printf("Pilih: ");
+        choice = readInt("", 0, 2);
+        set_message("");
         if (choice == 0) return;
         if (choice == 1) {
             if (p->gold < PULL_COST) {
-                printf("Gold kurang! Tarikan 1x butuh %d gold.\n", PULL_COST);
+                set_message("Gold kurang! Pull 1x butuh %d gold.", PULL_COST);
                 continue;
             }
             p->gold -= PULL_COST;
@@ -108,15 +120,16 @@ void gachaMenu(Player *p, const Item catalog[], int count)
         } else {
             int i;
             if (p->gold < PULL10_COST) {
-                printf("Gold kurang! Tarikan 10x butuh %d gold.\n", PULL10_COST);
+                set_message("Gold kurang! Pull 10x butuh %d gold.", PULL10_COST);
                 continue;
             }
             p->gold -= PULL10_COST;
-            printf("Hasil tarikan 10x:\n");
+            printf("Hasil pull 10x:\n");
             for (i = 0; i < 10; i++) {
                 p->totalPull++;
                 pullOnce(p, catalog, count, rollRarity(&p->pity));
             }
         }
+        ui_wait_enter("Tekan Enter untuk lanjut...");
     }
 }

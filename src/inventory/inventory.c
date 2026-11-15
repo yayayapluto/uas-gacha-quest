@@ -4,6 +4,7 @@
 #include "config.h"
 #include "inventory.h"
 #include "util.h"
+#include "ui.h"
 
 /* Prints the inventory table with equipped markers. */
 static void showInventory(const Player *p)
@@ -14,9 +15,11 @@ static void showInventory(const Player *p)
     printf("Inventory (%d/%d)\n", p->itemCount, MAX_ITEM);
     printf("%-4s %-20s %-4s %-10s %-5s %s\n", "Idx", "Nama", "Tipe", "Rarity", "Power", "Terpasang");
     for (i = 0; i < p->itemCount; i++) {
-        printf("%-4d %-20s %-4c %-10s %-5d %s\n",
+        printf("%s%-4d %-20s %-4c %-10s %-5d%s %s\n",
+               rarity_color(p->inventory[i].rarity),
                i, p->inventory[i].name, p->inventory[i].type,
                rarityNames[p->inventory[i].rarity], p->inventory[i].power,
+               ANSI_RESET,
                i == p->weaponIndex ? "[SENJATA]" : (i == p->armorIndex ? "[ARMOR]" : ""));
     }
 }
@@ -39,20 +42,26 @@ void inventoryMenu(Player *p)
     int choice;
 
     for (;;) {
-        printLine();
+        clear_screen();
+        draw_header("INVENTORY", p);
         showInventory(p);
-        printf("=== Inventory ===\n");
-        printf("1. Urutkan\n");
-        printf("2. Cari item\n");
-        printf("3. Equip item\n");
-        printf("0. Kembali\n");
-        choice = readInt("Pilih: ", 0, 3);
+        draw_menu(1, "Urutkan");
+        draw_menu(2, "Cari item");
+        draw_menu(3, "Equip item");
+        draw_menu(0, "Kembali");
+        if (last_message()[0] != '\0')
+            printf("%s%s%s\n", ANSI_CYAN, last_message(), ANSI_RESET);
+        printf("Pilih: ");
+        choice = readInt("", 0, 3);
+        set_message("");
         if (choice == 0) return;
         switch (choice) {
         case 1: {
-            int mode = readInt("Urutkan berdasarkan (1 rarity, 2 power, 3 nama): ", 1, 3);
+            int mode;
+            printf("Urutkan berdasarkan (1 rarity, 2 power, 3 nama): ");
+            mode = readInt("", 1, 3);
             sortInventory(p, mode);
-            printf("Inventory terurut.\n");
+            set_message("Inventory terurut.");
             break;
         }
         case 2: {
@@ -60,24 +69,25 @@ void inventoryMenu(Player *p)
             int found;
             readString("Cari nama item: ", word, MAX_NAME);
             found = searchItemByName(p, word);
-            if (found == 0) printf("Tidak ada item yang cocok.\n");
-            else printf("Ditemukan %d item.\n", found);
+            if (found == 0) set_message("Tidak ada item yang cocok.");
+            else set_message("Ditemukan %d item.", found);
             break;
         }
         case 3: {
             int index;
             if (p->itemCount == 0) {
-                printf("Inventory kosong.\n");
+                set_message("Inventory kosong.");
                 break;
             }
-            index = readInt("Nomor indeks item yang dipasang (999 batal): ", 0, 999);
+            printf("Nomor indeks item yang dipasang (999 batal): ");
+            index = readInt("", 0, 999);
             if (index == 999) break;
             if (index >= p->itemCount) {
-                printf("Indeks tidak ada di inventory.\n");
+                set_message("Indeks tidak ada di inventory.");
                 break;
             }
             equipItem(p, index);
-            printf("%s dipasang.\n", p->inventory[index].name);
+            set_message("%s dipasang.", p->inventory[index].name);
             break;
         }
         }
@@ -136,8 +146,10 @@ int searchItemByName(const Player *p, const char *word)
         lowerName[MAX_NAME - 1] = '\0';
         for (k = 0; lowerName[k] != '\0'; k++) lowerName[k] = (char)tolower((unsigned char)lowerName[k]);
         if (strstr(lowerName, lowerWord) != NULL) {
-            printf("Ditemukan: idx %d %s (tipe %c, power %d)\n",
-                   i, p->inventory[i].name, p->inventory[i].type, p->inventory[i].power);
+            printf("%sDitemukan: idx %d %s (tipe %c, power %d)%s\n",
+                   rarity_color(p->inventory[i].rarity),
+                   i, p->inventory[i].name, p->inventory[i].type, p->inventory[i].power,
+                   ANSI_RESET);
             found++;
         }
     }

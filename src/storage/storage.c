@@ -1,9 +1,9 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include "config.h"
 #include "storage.h"
 #include "util.h"
+#include "ui.h"
 
 /* Reads the item catalog; returns how many items were loaded. */
 int loadCatalog(const char *file, Item items[])
@@ -14,7 +14,7 @@ int loadCatalog(const char *file, Item items[])
     int count = 0;
 
     if (fp == NULL) {
-        printf("File katalog %s tidak bisa dibuka.\n", file);
+        set_message("File katalog %s tidak bisa dibuka.", file);
         return 0;
     }
     while (count < MAX_ITEM && fgets(line, sizeof line, fp) != NULL) {
@@ -39,7 +39,7 @@ int loadMonsters(const char *file, Monster monsters[])
     int count = 0;
 
     if (fp == NULL) {
-        printf("File monster %s tidak bisa dibuka.\n", file);
+        set_message("File monster %s tidak bisa dibuka.", file);
         return 0;
     }
     while (count < MAX_MONSTER && fgets(line, sizeof line, fp) != NULL) {
@@ -62,7 +62,7 @@ int saveGame(const Player *p)
     int weaponId = -1, armorId = -1, i;
 
     if (fp == NULL) {
-        printf("Gagal membuka data/save.txt untuk menulis.\n");
+        set_message("Gagal membuka data/save.txt untuk menulis.");
         return 0;
     }
     if (p->weaponIndex >= 0) weaponId = p->inventory[p->weaponIndex].id;
@@ -74,7 +74,7 @@ int saveGame(const Player *p)
     for (i = 0; i < p->itemCount; i++)
         fprintf(fp, "%d\n", p->inventory[i].id);
     fclose(fp);
-    printf("Progres tersimpan di data/save.txt.\n");
+    set_message("Progres tersimpan di data/save.txt.");
     return 1;
 }
 
@@ -87,7 +87,7 @@ int loadGame(Player *p, const Item items[], int count)
     int weaponId, armorId, itemCount, i, j, id;
 
     if (fp == NULL) {
-        printf("Gagal memuat: data/save.txt tidak ada.\n");
+        set_message("Gagal memuat: data/save.txt tidak ada.");
         return 0;
     }
     memset(&tmp, 0, sizeof tmp);
@@ -97,19 +97,19 @@ int loadGame(Player *p, const Item items[], int count)
                &tmp.atk, &tmp.def, &tmp.potion, &tmp.pity, &tmp.totalPull,
                &tmp.score, &tmp.seed, &weaponId, &armorId) != 15) {
         fclose(fp);
-        printf("Gagal memuat: format data/save.txt rusak.\n");
+        set_message("Gagal memuat: format data/save.txt rusak.");
         return 0;
     }
     if (fgets(line, sizeof line, fp) == NULL || sscanf(line, "%d", &itemCount) != 1 ||
         itemCount < 0 || itemCount > MAX_ITEM) {
         fclose(fp);
-        printf("Gagal memuat: jumlah item tidak valid.\n");
+        set_message("Gagal memuat: jumlah item tidak valid.");
         return 0;
     }
     for (i = 0; i < itemCount; i++) {
         if (fgets(line, sizeof line, fp) == NULL || sscanf(line, "%d", &id) != 1) {
             fclose(fp);
-            printf("Gagal memuat: daftar item tidak lengkap.\n");
+            set_message("Gagal memuat: daftar item tidak lengkap.");
             return 0;
         }
         for (j = 0; j < count; j++) {
@@ -117,7 +117,7 @@ int loadGame(Player *p, const Item items[], int count)
         }
         if (j == count) {
             fclose(fp);
-            printf("Gagal memuat: item ID %d tidak ada di katalog.\n", id);
+            set_message("Gagal memuat: item ID %d tidak ada di katalog.", id);
             return 0;
         }
         tmp.inventory[i] = items[j];
@@ -128,7 +128,7 @@ int loadGame(Player *p, const Item items[], int count)
         tmp.pity < 0 || tmp.pity > PITY_THRESHOLD || tmp.totalPull < 0 || tmp.score < 0 ||
         weaponId < -1 || armorId < -1) {
         fclose(fp);
-        printf("Gagal memuat: nilai di luar rentang.\n");
+        set_message("Gagal memuat: nilai di luar rentang.");
         return 0;
     }
     tmp.itemCount = itemCount;
@@ -140,7 +140,7 @@ int loadGame(Player *p, const Item items[], int count)
     }
     *p = tmp;
     fclose(fp);
-    printf("Selamat datang kembali, %s!\n", tmp.name);
+    set_message("Selamat datang kembali, %s!", tmp.name);
     return 1;
 }
 
@@ -192,13 +192,13 @@ void recordScore(const Player *p)
     }
     fp = fopen("data/leaderboard.txt", "w");
     if (fp == NULL) {
-        printf("Gagal membuka data/leaderboard.txt untuk menulis.\n");
+        set_message("Gagal membuka data/leaderboard.txt untuk menulis.");
         return;
     }
     for (i = 0; i < count && i < MAX_LEADERBOARD; i++)
         fprintf(fp, "%s|%d|%d\n", names[i], levels[i], scores[i]);
     fclose(fp);
-    printf("Skor %s (%d) dicatat ke leaderboard.\n", p->name, p->score);
+    set_message("Skor %s (%d) dicatat ke leaderboard.", p->name, p->score);
 }
 
 /* Shows the top 5 of the leaderboard. */
@@ -209,7 +209,8 @@ void showLeaderboard(void)
     char name[MAX_NAME];
     int level, score, rank = 0;
 
-    printf("=== Leaderboard (Top %d) ===\n", TOP_DISPLAY);
+    clear_screen();
+    printf("%s=== Leaderboard (Top %d) ===%s\n", ANSI_CYAN, TOP_DISPLAY, ANSI_RESET);
     if (fp == NULL) {
         printf("Belum ada data leaderboard.\n");
         return;
@@ -220,6 +221,6 @@ void showLeaderboard(void)
             rank++;
         }
     }
-    if (rank == 0) printf("Belum ada data leaderboard.\n");
+    if (rank == 0) printf("%sBelum ada data leaderboard.%s\n", ANSI_RED, ANSI_RESET);
     fclose(fp);
 }

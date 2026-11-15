@@ -11,34 +11,49 @@
 #include "shop.h"
 #include "storage.h"
 #include "dungeon.h"
+#include "ui.h"
 
 /* Shows the main menu and returns the player choice. */
 int mainMenu(void)
 {
-    printLine();
-    printf("       GACHA QUEST\n");
-    printf(" 1. Game Baru\n");
-    printf(" 2. Lanjutkan\n");
-    printf(" 3. Leaderboard\n");
-    printf(" 0. Keluar\n");
-    return readInt("Pilih: ", 0, 3);
+    int choice;
+
+    clear_screen();
+    printf("%s", ANSI_CYAN);
+    printf("           GACHA QUEST\n");
+    printf("%s", ANSI_RESET);
+    draw_menu(1, "Game Baru");
+    draw_menu(2, "Lanjutkan");
+    draw_menu(3, "Leaderboard");
+    draw_menu(0, "Keluar");
+    if (last_message()[0] != '\0')
+        printf("%s%s%s\n", ANSI_CYAN, last_message(), ANSI_RESET);
+    printf("Pilih: ");
+    choice = readInt("", 0, 3);
+    set_message("");
+    return choice;
 }
 
 /* Shows the game hub and returns the player choice. */
 int hubMenu(const Player *p)
 {
-    printLine();
-    printf("--- Hub | %s | Lv %d | HP %d/%d | Gold %d | Skor %d ---\n",
-           p->name, p->level, p->hp, p->maxHp, p->gold, p->score);
-    printf(" 1. Battle\n");
-    printf(" 2. Gacha\n");
-    printf(" 3. Inventory\n");
-    printf(" 4. Shop\n");
-    printf(" 5. Dungeon\n");
-    printf(" 6. Status\n");
-    printf(" 7. Simpan\n");
-    printf(" 0. Kembali ke menu utama\n");
-    return readInt("Pilih: ", 0, 7);
+    int choice;
+
+    clear_screen();
+    draw_header("HUB", p);
+    draw_menu(1, "Battle");
+    draw_menu(2, "Gacha");
+    draw_menu(3, "Inventory");
+    draw_menu(4, "Shop");
+    draw_menu(5, "Dungeon");
+    draw_menu(6, "Status");
+    draw_menu(7, "Simpan");
+    draw_menu(0, "Kembali ke menu utama");
+    if (last_message()[0] != '\0')
+        printf("%s%s%s\n", ANSI_CYAN, last_message(), ANSI_RESET);
+    printf("Pilih: ");
+    choice = readInt("", 0, 7);
+    return choice;
 }
 
 /* Hub loop: every feature is reachable from here. */
@@ -63,7 +78,11 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
                 if (answer[0] == 'y' || answer[0] == 'Y') saveGame(p);
             }
             recordScore(p);
-            printf("Kembali ke menu utama.\n");
+            if (last_message()[0] != '\0')
+                set_message("%s Kembali ke menu utama.", last_message());
+            else
+                set_message("Kembali ke menu utama.");
+            ui_wait_enter("Tekan Enter untuk lanjut...");
             return;
         }
         }
@@ -80,6 +99,7 @@ int main(void)
     int running = 1;
 
     srand((unsigned)time(NULL));
+    ui_init();
     catalogCount = loadCatalog("data/item.txt", catalog);
     monsterCount = loadMonsters("data/monster.txt", monsters);
     if (catalogCount == 0 || monsterCount == 0) {
@@ -95,7 +115,7 @@ int main(void)
             char name[MAX_NAME];
             readString("Masukkan nama pemain: ", name, MAX_NAME);
             initPlayer(&player, name);
-            printf("Selamat datang, %s! Kamu dapat 200 gold.\n", player.name);
+            set_message("Selamat datang, %s! Kamu dapat 200 gold.", player.name);
             player.seed = promptWorldSeed();
             runHub(&player, catalog, catalogCount, monsters, monsterCount);
             break;
@@ -103,10 +123,13 @@ int main(void)
         case 2:
             if (loadGame(&player, catalog, catalogCount)) {
                 runHub(&player, catalog, catalogCount, monsters, monsterCount);
+            } else {
+                ui_wait_enter("Tekan Enter untuk lanjut...");
             }
             break;
         case 3:
             showLeaderboard();
+            ui_wait_enter("Tekan Enter untuk lanjut...");
             break;
         case 0:
             shutdownGame();

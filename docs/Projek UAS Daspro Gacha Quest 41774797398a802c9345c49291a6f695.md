@@ -1,8 +1,8 @@
-# Projek UAS Daspro | Gacha Quest
+﻿# Projek UAS Daspro | Gacha Quest
 
 # PRD: Gacha Quest
 
-*Mini RPG + Gacha berbasis CLI (Bahasa C) · Proyek UAS Dasar Pemrograman · Kelompok 5 orang · v1.0 · 13 November 2026*
+*Mini RPG + Gacha berbasis CLI (Bahasa C) Â· Proyek UAS Dasar Pemrograman Â· Kelompok 5 orang Â· v1.0 Â· 13 November 2026*
 
 ## 1. Ringkasan
 
@@ -17,7 +17,7 @@ Tujuan utama proyek bukan kecanggihan game, tetapi **pemakaian 9 materi kuliah s
 - Seluruh 9 materi kuliah terpakai secara nyata di dalam program.
 - Program stabil: input salah atau file rusak tidak membuat program crash.
 - Kode modular (beberapa file .c dan .h), mudah dibagi ke 5 orang.
-- Alur demo jelas untuk presentasi: *new game → battle → gacha → equip → dungeon → save → load → leaderboard*.
+- Alur demo jelas untuk presentasi: *new game â†’ battle â†’ gacha â†’ equip â†’ dungeon â†’ save â†’ load â†’ leaderboard*.
 
 **Non-Tujuan (sengaja tidak dikerjakan)**
 
@@ -57,7 +57,7 @@ Pengguna adalah mahasiswa atau dosen penguji yang menjalankan program di termina
 | F-01 | Menu utama | Game baru, lanjutkan, leaderboard, keluar | Wajib |
 | F-02 | Hub game | Battle, gacha, inventory, shop, dungeon, status, simpan, kembali | Wajib |
 | F-03 | Battle | Pertarungan bergiliran melawan monster acak | Wajib |
-| F-04 | Gacha | Tarik 1x atau 10x, rarity, pity, duplikat jadi gold | Wajib |
+| F-04 | Gacha | Pull 1x atau 10x, rarity, pity, duplikat jadi gold | Wajib |
 | F-05 | Inventory | Lihat, urutkan, cari, dan equip item | Wajib |
 | F-06 | Shop | Beli potion, jual item | Wajib |
 | F-07 | Level dan status | EXP, naik level, statistik pemain | Wajib |
@@ -67,16 +67,16 @@ Pengguna adalah mahasiswa atau dosen penguji yang menjalankan program di termina
 
 ### 5.1 Alur Menu
 
-**Menu utama:** 1 Game Baru · 2 Lanjutkan · 3 Leaderboard · 0 Keluar.
+**Menu utama:** 1 Game Baru Â· 2 Lanjutkan Â· 3 Leaderboard Â· 0 Keluar.
 
-**Hub game:** 1 Battle · 2 Gacha · 3 Inventory · 4 Shop · 5 Dungeon · 6 Status · 7 Simpan · 0 Kembali ke menu utama (menawarkan simpan dan mencatat skor ke leaderboard).
+**Hub game:** 1 Battle Â· 2 Gacha Â· 3 Inventory Â· 4 Shop Â· 5 Dungeon Â· 6 Status Â· 7 Simpan Â· 0 Kembali ke menu utama (menawarkan simpan dan mencatat skor ke leaderboard).
 
 ## 6. Aturan Game
 
 ### 6.1 Statistik awal dan level
 
 - Pemain awal: HP 100, ATK 10, DEF 3, gold 200, potion 2, level 1.
-- EXP yang dibutuhkan untuk naik level: level × 50. Level maksimum 10.
+- EXP yang dibutuhkan untuk naik level: level Ã— 50. Level maksimum 10.
 - Naik level: maxHp +15, ATK +2, DEF +1, HP dipulihkan penuh.
 - ATK total = ATK dasar + power senjata terpasang. DEF total = DEF dasar + power armor terpasang.
 
@@ -90,7 +90,7 @@ Monster dipilih acak dari monster yang levelMin-nya kurang dari atau sama dengan
 | 2. Bertahan | Damage yang diterima pada giliran itu dibagi 2 (minimal 1) |
 | 3. Potion | Pulihkan 50 HP (maksimal maxHp), stok potion berkurang 1 |
 | 4. Kabur | 50% berhasil (battle selesai tanpa hadiah); gagal berarti monster menyerang |
-- **Damage:** max(1, ATK − DEF_lawan) + (rand() % 4). Peluang kritis 10% (damage × 2).
+- **Damage:** max(1, ATK âˆ’ DEF_lawan) + (rand() % 4). Peluang kritis 10% (damage Ã— 2).
 - **Menang:** pemain mendapat EXP dan gold monster, skor bertambah sebesar EXP monster.
 - **Kalah:** gold berkurang setengah, HP dipulihkan penuh, tidak ada game over.
 
@@ -161,11 +161,11 @@ Angka di atas adalah nilai awal; boleh disesuaikan saat pengujian keseimbangan g
 
 Fitur ini adalah versi ringan dari ide maze awal: **tanpa generate peta dan tanpa editor**. Peta dibuat manual oleh tim dan dibaca dari file.
 
-- **Peta:** data/dungeon1.txt, dungeon2.txt, dungeon3.txt, disimpan di array 2D (maksimal 20 × 40). Simbol: # tembok, . jalan, S start, T treasure, E exit.
+- **Peta:** data/dungeon1.txt, dungeon2.txt, dungeon3.txt, disimpan di array 2D (maksimal 20 Ã— 40). Simbol: # tembok, . jalan, S start, T treasure, E exit.
 - **Gerak:** W A S D, tembok tidak bisa dilewati, langkah dihitung.
 - **Treasure:** T memberi 30 gold lalu berubah menjadi ..
 - **Exit:** mencapai E memberi 100 gold, 40 EXP, dan skor +50.
-- **Batas langkah:** 2 × panjang jalur terpendek (BFS) dari S ke E. Jika melebihi batas, pemain keluar tanpa hadiah exit (treasure yang sudah diambil tetap dihitung).
+- **Batas langkah:** 2 Ã— panjang jalur terpendek (BFS) dari S ke E. Jika melebihi batas, pemain keluar tanpa hadiah exit (treasure yang sudah diambil tetap dihitung).
 - **BFS (hint):** tombol H menggambar jalur terpendek dari posisi pemain ke E dengan tanda *. Biaya 30 gold, maksimal 3 kali per kunjungan.
 - **DFS (validasi):** saat peta dimuat, DFS memeriksa apakah E dapat dicapai dari S. Peta yang tidak valid ditolak dan tidak ditampilkan di menu.
 - **Implementasi:** BFS memakai queue array (front, rear), array dikunjungi\[]\[], dan array asal\[]\[] untuk merekonstruksi jalur. DFS memakai stack array (iteratif, tanpa rekursi).
@@ -234,17 +234,17 @@ data/leaderboard.txt: nama|level|skor per baris.
 ## 10. Arsitektur Modul
 
 gacha-quest/\
-├── main.c          menu utama dan loop game\
-├── config.h        konstanta dan struct bersama\
-├── player.c/.h     status, level up, tambah EXP dan gold\
-├── battle.c/.h     monster, loop battle, damage\
-├── gacha.c/.h      tarikan, rarity, pity, duplikat\
-├── inventory.c/.h  tampil, urutkan, cari, equip\
-├── shop.c/.h       beli potion, jual item\
-├── storage.c/.h    muat katalog, simpan dan muat game, leaderboard\
-├── dungeon.c/.h    peta, gerak, BFS, DFS\
-├── util.c/.h       validasi input, bersihkan layar, garis pemisah\
-└── data/           item.txt, monster.txt, save.txt, leaderboard.txt, dungeon1-3.txt
+â”œâ”€â”€ main.c          menu utama dan loop game\
+â”œâ”€â”€ config.h        konstanta dan struct bersama\
+â”œâ”€â”€ player.c/.h     status, level up, tambah EXP dan gold\
+â”œâ”€â”€ battle.c/.h     monster, loop battle, damage\
+â”œâ”€â”€ gacha.c/.h      tarikan, rarity, pity, duplikat\
+â”œâ”€â”€ inventory.c/.h  tampil, urutkan, cari, equip\
+â”œâ”€â”€ shop.c/.h       beli potion, jual item\
+â”œâ”€â”€ storage.c/.h    muat katalog, simpan dan muat game, leaderboard\
+â”œâ”€â”€ dungeon.c/.h    peta, gerak, BFS, DFS\
+â”œâ”€â”€ util.c/.h       validasi input, bersihkan layar, garis pemisah\
+â””â”€â”€ data/           item.txt, monster.txt, save.txt, leaderboard.txt, dungeon1-3.txt
 
 Diagram arsitektur dan alur ada pada bagian 14.
 
@@ -345,7 +345,7 @@ Diagram dibuat sebagai file Excalidraw terpisah:
 | 3 | Battle sampai menang | EXP, gold, dan skor bertambah; naik level jika EXP cukup |
 | 4 | Battle sampai kalah | Gold berkurang setengah, HP pulih, kembali ke hub |
 | 5 | Gacha 10x dengan gold 200 | Ditolak, gold tidak berubah |
-| 6 | Gacha 10x berturut-turut tanpa Epic | Tarikan ke-11 dijamin Epic atau lebih tinggi |
+| 6 | Gacha 10x berturut-turut tanpa Epic | Pull ke-11 dijamin Epic atau lebih tinggi |
 | 7 | Dapat item duplikat | Otomatis menjadi gold sesuai rarity |
 | 8 | Urutkan dan cari di inventory | Urutan benar; pencarian tidak peka huruf besar kecil |
 | 9 | Jual item yang sedang terpasang | Ditolak |

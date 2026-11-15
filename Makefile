@@ -1,9 +1,9 @@
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra
-INC = -Isrc/core -Isrc/util -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon
+INC = -Isrc/core -Isrc/util -Isrc/ui -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon
 CFLAGS += $(INC)
 MODUL = main.c \
-        src/util/util.c src/player/player.c src/battle/battle.c \
+        src/util/util.c src/ui/ui.c src/player/player.c src/battle/battle.c \
         src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c \
         src/storage/storage.c src/dungeon/dungeon.c
 BIN = bin

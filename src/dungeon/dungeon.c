@@ -7,6 +7,7 @@
 #include "config.h"
 #include "dungeon.h"
 #include "util.h"
+#include "ui.h"
 #include "player.h"
 
 #define VIEW_WIDTH 25
@@ -235,7 +236,7 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
     int ay = st->posY - st->originY;
     int tx, ty;
 
-    printf("\033[H");
+    clear_screen();
     for (ty = 0; ty < VIEW_HEIGHT; ty++) {
         for (tx = 0; tx < VIEW_WIDTH; tx++) {
             int r = ay - VIEW_HEIGHT / 2 + ty;
@@ -251,8 +252,10 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
         }
         printf("\n");
     }
-    printf("Posisi dunia (%d,%d) | langkah %d | HP %d | gold %d | seed %u\n",
-           st->posX, st->posY, steps, p->hp, p->gold, st->seed);
+    printf("Posisi dunia (%d,%d) | langkah %d | HP %s%d/%d%s | gold %d | seed %u\n",
+           st->posX, st->posY, steps,
+           hp_color(p->hp, p->maxHp), p->hp, p->maxHp, ANSI_RESET,
+           p->gold, st->seed);
     printf("%s\n", message);
     printf("Gerak (W/A/S/D, H hint %d gold, Q keluar): ", HINT_COST);
     fflush(stdout);
@@ -316,14 +319,17 @@ void runDungeon(Player *p)
     buildArea(&st, area);
     memset(trail, ' ', sizeof trail);
 
+    clear_screen();
+    printf("%s", ANSI_DIM);
     printf("Dunia dungeon dibangun dari seed %u. Masukkan seed ini lagi kapan saja untuk peta yang persis sama.\n", st.seed);
     printf("Jalan ke segala arah. Kumpulkan treasure ($), lalu tekan Q kalau sudah puas.\n");
+    printf("%s", ANSI_RESET);
     printf("Tekan Enter untuk masuk: ");
     if (!readLine(entry, sizeof entry)) {
         printf("\n");
         return;
     }
-    printf("\033[2J\033[?25l");
+    printf("\033[?25l");
 
     /* DFS sanity check on the starting area: start cell must reach the far corridor end. */
     from.row = st.posY - st.originY;
@@ -406,8 +412,10 @@ void runDungeon(Player *p)
             }
             break;
         case 'Q':
-            printf("\033[?25h\033[0m");
-            printf("Keluar dungeon. Langkah total: %d.\n", steps);
+            printf("\033[?25h");
+            clear_screen();
+            set_message("Keluar dungeon. Langkah total: %d.", steps);
+            ui_wait_enter("Tekan Enter untuk lanjut...");
             finished = 1;
             break;
         default:
@@ -415,5 +423,5 @@ void runDungeon(Player *p)
             break;
         }
     }
-    if (!finished) printf("\033[?25h\033[0m\n");
+    if (!finished) printf("\033[?25h");
 }

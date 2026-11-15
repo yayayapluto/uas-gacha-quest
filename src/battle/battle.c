@@ -4,6 +4,7 @@
 #include "battle.h"
 #include "util.h"
 #include "player.h"
+#include "ui.h"
 
 /* Damage formula: max(1, ATK - DEF) + rand() % 4. */
 int calculateDamage(int atk, int def)
@@ -23,7 +24,9 @@ int attack(const char *from, const char *to, int atk, int targetDef, int *target
         *critical = 1;
     }
     *targetHp -= dmg;
-    printf("%s menyerang %s: %d damage%s\n", from, to, dmg, *critical ? " (KRITIS!)" : "");
+    printf("%s%s menyerang %s: %d damage%s%s\n",
+           *critical ? ANSI_RED : "", from, to, dmg,
+           *critical ? " (KRITIS!)" : "", *critical ? ANSI_RESET : "");
     return dmg;
 }
 
@@ -52,22 +55,30 @@ void startBattle(Player *p, const Monster m[], int count)
     int alive = 1;
 
     if (monsterIndex < 0) {
-        printf("Tidak ada monster yang tersedia.\n");
+        set_message("Tidak ada monster yang tersedia.");
         return;
     }
     enemy = m[monsterIndex];
     enemyHp = enemy.hp;
-    printf("Monster muncul: %s (HP %d, ATK %d, DEF %d)\n", enemy.name, enemy.hp, enemy.atk, enemy.def);
 
     while (alive) {
         int action;
-        printf("--- Battle vs %s ---\n", enemy.name);
-        printf("HP kamu: %d/%d (ATK %d, DEF %d, potion %d) | HP %s: %d\n",
-               p->hp, p->maxHp, totalAtk(p), totalDef(p), p->potion, enemy.name, enemyHp);
-        printf("1. Serang\n2. Bertahan\n3. Potion\n4. Kabur\n");
-        action = readInt("Aksi: ", 1, 4);
+
+        clear_screen();
+        draw_header("BATTLE", p);
+        draw_box_top(enemy.name);
+        draw_box_line("HP musuh: %d", enemyHp);
+        draw_box_line("ATK %d | DEF %d", enemy.atk, enemy.def);
+        draw_box_bottom();
+        printf("\n");
+        draw_menu(1, "Serang");
+        draw_menu(2, "Bertahan");
+        draw_menu(3, "Potion");
+        draw_menu(4, "Kabur");
+        printf("Aksi: ");
+        action = readInt("", 1, 4);
         if (feof(stdin)) {
-            printf("Battle dihentikan (input berakhir).\n");
+            set_message("Battle dihentikan (input berakhir).");
             alive = 0;
             break;
         }
@@ -76,7 +87,7 @@ void startBattle(Player *p, const Monster m[], int count)
         case 1: {
             attack(p->name, enemy.name, totalAtk(p), enemy.def, &enemyHp, &critical);
             if (enemyHp <= 0) {
-                printf("%s kalah! Kamu menang!\n", enemy.name);
+                printf("%s%s kalah! Kamu menang!%s\n", ANSI_GREEN, enemy.name, ANSI_RESET);
                 printf("Hadiah: +%d EXP, +%d gold, +%d skor.\n", enemy.exp, enemy.gold, enemy.exp);
                 addExp(p, enemy.exp);
                 p->gold += enemy.gold;
@@ -93,7 +104,7 @@ void startBattle(Player *p, const Monster m[], int count)
             dmg = calculateDamage(enemy.atk, totalDef(p));
             if (rand() % 100 < 10) {
                 dmg *= 2;
-                printf("%s menyerang: %d damage (KRITIS!)\n", enemy.name, dmg);
+                printf("%s%s menyerang: %d damage (KRITIS!)%s\n", ANSI_RED, enemy.name, dmg, ANSI_RESET);
             } else {
                 printf("%s menyerang: %d damage\n", enemy.name, dmg);
             }
@@ -126,11 +137,14 @@ void startBattle(Player *p, const Monster m[], int count)
         }
 
         if (p->hp <= 0) {
-            printf("Kamu dikalahkan oleh %s...\n", enemy.name);
+            printf("%sKamu dikalahkan oleh %s...%s\n", ANSI_RED, enemy.name, ANSI_RESET);
             p->gold /= 2;
             p->hp = p->maxHp;
             printf("Gold tinggal %d, HP dipulihkan penuh. Kembali ke hub.\n", p->gold);
             alive = 0;
         }
+        if (alive) ui_wait_enter("Tekan Enter untuk lanjut...");
     }
+    ui_wait_enter("Tekan Enter untuk lanjut...");
+    set_message("");
 }
