@@ -42,10 +42,11 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
 13. **Simpan ID terpasang.** data/save.txt menyimpan `weaponIndex`/`armorIndex`
     sebagai ID item (bukan indeks), lalu dimetakan kembali ke indeks inventory
     saat muat, sesuai bagian 9 PRD.
-14. **Graceful shutdown.** Keluar dari program hanya lewat
-    satu pintu (`shutdownGame`): pesan perpisahan + flush output. Ctrl+C di
-    Windows tetap mematikan proses karena signal.h dilarang batasan library;
-    sebagai gantinya semua jalur EOF sudah berakhir rapi tanpa loop abadi.
+14. **Graceful shutdown.** Keluar normal lewat satu pintu (`shutdownGame`) di
+    jalur menu. Sinyal (Ctrl+C, `kill`, terminal ditutup) ditangani
+    `src/platform/sig.c`: handler hanya menyetel flag, loop UI berhenti di
+    titik aman, autosave terakhir ditulis, lalu `session.lock` ditandai
+    `CLEAN`. Lihat keputusan 19-24 untuk mekanismenya.
 15. **`recordScore` saat penuh.** Jika leaderboard sudah 10 entri, entri terbaru
     menggantikan skor terendah; file selalu diurut menurun dan dipotong 10.
 16. **Jual item terpasang.** Ditolak dengan pesan; sinkronisasi
@@ -84,3 +85,16 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
     agar loop UI tetap reaktif. Crash handler (sigaltstack) memulihkan terminal
     lalu menambah satu baris di `data/crash.log` sebelum meneruskan sinyal;
     handler tidak pernah menulis state game.
+25. **RNG ikut disimpan, bukan diseed ulang.** Karena `rand()` tidak bisa
+    dibaca state-nya, seluruh panggilan diganti `plat_rand()` dan state ikut
+    masuk snapshot. Sesi yang dipulihkan melanjutkan urutan acak yang sama
+    seperti sebelum crash, bukan urutan baru.
+26. **Autosave hanya menulis snapshot terbaru.** Setiap `autosave_publish`
+    menyalin snapshot ke memori; thread latar membuang versi lama bila ada
+    snapshot lebih baru selama debounce. Tidak ada antrean berkas.
+27. **Titik publish.** Setelah tiap aksi dan sebelum redraw (`important=0`,
+    kena debounce), serta langsung untuk kejadian yang tidak boleh hilang:
+    akhir battle, hasil gacha, jual/beli, equip, treasure, dan keluar dungeon.
+28. **`make start` hanya menjalankan biner.** Deteksi tipe terminal tetap
+    tanggung jawab `caps_detect`, bukan Makefile; duplikasi logika di Makefile
+    akan berbeda hasil dengan programnya sendiri.

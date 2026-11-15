@@ -17,6 +17,10 @@ Modul di `src/ui/`, terpisah dari logika game:
 | `widgets.c/h` | Panel, tabel/menu ter-highlight, bar HP/EXP, footer hint, kotak pesan/log. |
 | `ui.c/h` | API publik yang dipakai layar game. |
 
+Modul `src/platform/` tidak menggambar apa pun, tetapi memengaruhi tampilan
+lewat tiga hal: pemulihan terminal saat sinyal/crash, tawaran memulihkan sesi
+sebelum UI aktif, dan pesan kegagalan autosave di panel pesan.
+
 Setiap layar di-redraw penuh: layar dibersihkan di grid, frame baru digambar,
 lalu menunggu input. Tidak ada lagi output yang menumpuk ke bawah.
 
@@ -611,6 +615,42 @@ Keluar dari game:
 Terima kasih sudah bermain Gacha Quest!
 ```
 
+## 12b. Startup, sesi, dan autosave
+
+Pesan ini dicetak dengan `printf` biasa, **sebelum** `ui_init()`, sehingga
+muncul di terminal yang masih mode cooked:
+
+```
+Game sudah berjalan di terminal lain.
+```
+Instance kedua langsung keluar dengan status 1 (tidak ada layar yang digambar).
+
+```
+Pulihkan sesi sebelumnya? (y/n)
+```
+Muncul hanya bila sesi sebelumnya berakhir tidak wajar (`session.lock` masih
+`RUNNING`) dan `data/autosave.dat` (atau `.bak`) lolos validasi. Jawaban `y`
+langsung membuka layar tempat sesi berhenti:
+
+| State tersimpan | Layar pertama setelah `y` |
+| --- | --- |
+| sedang battle | Battle dengan monster dan HP tersisa yang sama |
+| sedang di dungeon | Dungeon pada posisi, langkah, hint, dan peta yang sama |
+| di hub/menu | Hub dengan progres terakhir |
+
+Jawaban selain `y` (termasuk Enter/EOF) tetap ke Menu Utama seperti biasa.
+
+Kegagalan tulis autosave tampil sekali di panel pesan layar berikutnya, tanpa
+menghentikan permainan:
+
+```
+Autosave gagal: <alasan dari sistem berkas>.
+```
+
+Tidak ada indikator autosave sukses di layar; keberhasilan hanya terlihat dari
+isi `data/autosave.dat`. Simpan manual (hub menu 7) tetap pesan lama
+"Progres tersimpan di data/save.txt.".
+
 ## 13. Validasi input (semua layar)
 
 ```
@@ -637,6 +677,9 @@ Input berakhir (EOF).
 | Status | `src/player/player.c` (`showStatus`) |
 | Dungeon | `src/dungeon/dungeon.c` |
 | Simpan/muat, Leaderboard | `src/storage/storage.c` |
+| Tawaran pulihkan sesi, pesan kunci sesi | `main.c` (`main`) |
+| Pesan "Autosave gagal" | `main.c` (`runHub`, dari `autosave_poll_error`) |
+| Restore battle / dungeon | `battle.c` (`resumeBattle`), `dungeon.c` (`resumeDungeon`) |
 
 ---
 
@@ -650,10 +693,17 @@ Input berakhir (EOF).
    konsol Windows mendukung UTF-8 walau `LANG` tidak diset. `GACHA_ASCII=1`
    tetap bisa memaksa ASCII. Aturan `LANG` (C→ASCII, UTF-8→Unicode) berlaku penuh
    di POSIX dan di Windows sebelum VT aktif.
-3. **Lebar tetap 78 kolom, dipusatkan.** Lebih aman untuk perataan tabel
-   (inventory/shop/leaderboard) daripada layout penuh selebar terminal.
+3. **Lebar panel tetap 50 kolom, rata kiri.** Lebih aman untuk perataan tabel
+   (inventory/shop/leaderboard) daripada layout penuh selebar terminal; sisa
+   kolom di kanan dibiarkan kosong.
 4. **q/ESC pada dungeon langsung keluar** (bukan prompt), sesuai perilaku lama
    "Q keluar"; tidak menambah langkah konfirmasi.
 5. **Pesan EOF non-interaktif** dipertahankan persis ("Input berakhir (EOF)...").
 6. **Bar HP mono** mengandalkan `█`/`░`; ambang warna tidak dipakai agar tetap
    konsisten terbaca tanpa warna.
+7. **Tanpa indikator autosave di layar.** Menulis status autosave ke panel
+   setiap aksi akan berkedip dan menimpa pesan aksi; kegagalan saja yang
+   dilaporkan karena itu satu-satunya hal yang butuh tindakan pemain.
+8. **Pemulihan sesi memakai `printf` biasa.** Ditanyakan sebelum UI aktif agar
+   pemain bisa menjawab walaupun terminal belum siap untuk raw mode; sesudah
+   itu layar game mengambil alih seperti biasa.

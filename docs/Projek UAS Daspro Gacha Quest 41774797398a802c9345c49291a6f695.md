@@ -31,13 +31,31 @@ Tujuan utama proyek bukan kecanggihan game, tetapi **pemakaian 9 materi kuliah s
 
 | Aspek | Ketentuan |
 | --- | --- |
-| Bahasa dan standar | C (gcc -std=c99 -Wall -Wextra), tanpa warning |
-| Library | stdio.h, stdlib.h, string.h, time.h, ctype.h |
+| Bahasa dan standar | C (gcc -std=c11 -Wall -Wextra -Wpedantic), tanpa warning |
+| Library | stdio.h, stdlib.h, string.h, time.h, ctype.h, ditambah pustaka sistem sesuai revisi (lihat 3.1) |
 | Materi yang dipakai | Hanya 9 materi yang sudah dipelajari. **Pengecualian:** Dungeon Explorer (BFS/DFS) |
 | Penyimpanan data | Array dan struct berukuran tetap (konstanta di config.h) |
 | Variabel global | Dihindari; data dikirim lewat parameter (pointer) |
 | Rekursi | Tidak dipakai. BFS memakai *queue* dari array (front, rear), DFS memakai *stack* dari array |
-| Platform | Terminal (Windows, Linux, atau WSL), teks ASCII |
+| Platform | Terminal (Windows, Linux, atau WSL), teks ASCII atau UTF-8 bila terminal mendukung |
+
+### 3.1 Penyimpangan yang disetujui (revisi setelah PRD)
+
+Revisi tampilan, input, dan ketahanan sesi menambah kebutuhan yang tidak ada di
+PRD awal. Semuanya terisolasi di `src/ui/` dan `src/platform/`; logika game
+(gameplay, aturan, format data pemain) tidak berubah.
+
+| Ketentuan awal | Kenyataan sekarang | Alasan |
+| --- | --- | --- |
+| C99 | C11 (`-std=c11`) | `_Static_assert`, `sigaction`/`threads` butuh dukungan header modern |
+| Hanya 5 header standar | Ditambah header sistem: `termios.h`, `poll.h`, `signal.h`, `sys/file.h`, `pthread.h`, `sys/ioctl.h` (POSIX) dan `windows.h`, `conio.h` (Windows) | Raw mode, resize, shutdown rapi, autosave latar |
+| Tanpa library eksternal | Tetap tanpa library eksternal; semuanya API sistem operasi | Batasan utama dipertahankan |
+| Variabel global dihindari | State platform (`shutdownFlag`, handle kunci, mutex, thread) memakai variabel file-scope | Handler sinyal tidak boleh menerima parameter; state game tetap lewat pointer |
+| Teks ASCII | ASCII atau UTF-8 (`┌ ─ │ █ ░`) sesuai deteksi locale/terminal | Tampilan lebih rapi, dengan fallback ASCII penuh |
+| Tanpa autosave | Autosave biner + pemulihan sesi | Permintaan ketahanan crash (`kill -9`, listrik mati) |
+| Simpan manual `save.txt` | Tetap ada; autosave terpisah di `autosave.dat` | Autosave tidak boleh menimpa simpan manual pemain |
+
+Rincian keputusan: `DECISIONS.md` butir 19-28. Rincian tampilan: `UI.md`.
 
 ## 4. Pengguna dan Skenario
 
@@ -233,18 +251,33 @@ data/leaderboard.txt: nama|level|skor per baris.
 
 ## 10. Arsitektur Modul
 
-gacha-quest/\
-â”œâ”€â”€ main.c          menu utama dan loop game\
-â”œâ”€â”€ config.h        konstanta dan struct bersama\
-â”œâ”€â”€ player.c/.h     status, level up, tambah EXP dan gold\
-â”œâ”€â”€ battle.c/.h     monster, loop battle, damage\
-â”œâ”€â”€ gacha.c/.h      tarikan, rarity, pity, duplikat\
-â”œâ”€â”€ inventory.c/.h  tampil, urutkan, cari, equip\
-â”œâ”€â”€ shop.c/.h       beli potion, jual item\
-â”œâ”€â”€ storage.c/.h    muat katalog, simpan dan muat game, leaderboard\
-â”œâ”€â”€ dungeon.c/.h    peta, gerak, BFS, DFS\
-â”œâ”€â”€ util.c/.h       validasi input, bersihkan layar, garis pemisah\
-â””â”€â”€ data/           item.txt, monster.txt, save.txt, leaderboard.txt, dungeon1-3.txt
+Struktur sekarang (semua file di bawah `src/` kecuali `main.c`):
+
+```
+projek uas/
+├── main.c              menu utama, loop hub, alur pemulihan sesi
+├── Makefile            build, test, debug, preview, start
+├── src/core/config.h   konstanta dan struct bersama
+├── src/util/           validasi input, baca baris, helper teks
+├── src/player/         status, level up, tambah EXP dan gold
+├── src/battle/         monster, loop battle, damage, resume battle
+├── src/gacha/          tarikan, rarity, pity, duplikat
+├── src/inventory/      tampil, urutkan, cari, equip
+├── src/shop/           beli potion, jual item
+├── src/storage/        muat katalog, simpan dan muat game, leaderboard
+├── src/dungeon/        dunia ber-seed, gerak, BFS, DFS, resume dungeon
+├── src/ui/             term, caps, style, render, widgets, ui (tampilan)
+├── src/platform/       rng, atomicfile, lock, sig, crash, autosave, platform
+├── tools/              ui_preview.c (pratinjau widget tanpa game)
+├── tests/              driver uji C, skenario input pipa, run_tests.sh
+└── data/               item.txt, monster.txt (runtime: save, leaderboard,
+                        autosave, session.lock, crash.log)
+```
+
+Pemisahan `src/ui/` dan `src/platform/` sengaja: logika game memanggil fungsi
+bernama biasa, sedangkan detail OS (raw mode, sinyal, thread, tulis atomik)
+diisolasi supaya tidak mengotori modul permainan. Peta file lengkap ada di
+`README.md`, dan alasan tiap modul ada di `DECISIONS.md` butir 19-28.
 
 Diagram arsitektur dan alur ada pada bagian 14.
 
@@ -370,7 +403,11 @@ Diagram dibuat sebagai file Excalidraw terpisah:
 ## 17. Definition of Done
 
 - Semua fitur F-01 s.d. F-10 berjalan dan lolos skenario pada bagian 15.
-- Kompilasi tanpa warning dengan -Wall -Wextra.
+- Kompilasi tanpa warning dengan -Wall -Wextra -Wpedantic.
+- `make test` lulus seluruh pemeriksaan, termasuk driver platform
+  (`tests/t_platform.c`).
+- Keluar normal, Ctrl+C, dan sesi yang dipulihkan berjalan sesuai butir 3.1;
+  penyimpangan yang disetujui tercatat, bukan tersembunyi.
 - Kode terbagi modul, setiap fungsi punya komentar singkat.
 - README berisi cara kompilasi, cara bermain, dan pembagian tugas.
 - Setiap anggota dapat menjelaskan dan mendemonstrasikan modul yang ia kerjakan.
