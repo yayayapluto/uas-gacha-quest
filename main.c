@@ -20,16 +20,11 @@ static void mainMenuDraw(void *ctx, int sel)
 {
     static const char *items[] = { "Game Baru", "Lanjutkan", "Leaderboard", "Keluar" };
     static const int nums[] = { 1, 2, 3, 0 };
-    const Glyphs *g = caps_glyphs();
-    int i;
     (void)ctx;
 
     ui_frame("Menu Utama");
-    render_text(2, 0, ST_TITLE, "G A C H A   Q U E S T");
-    for (i = 0; i < 22; i++)
-        render_text(3, i, ST_BORDER, "%s", g->hz);
-    ui_menu_v(5, 2, items, nums, 4, sel);
-    ui_message(20);
+    ui_menu_v(2, 0, items, nums, 4, sel);
+    ui_message(7);
 }
 
 int mainMenu(void)
@@ -50,8 +45,8 @@ static void hubMenuDraw(void *ctx, int sel)
 
     ui_frame("Hub");
     ui_status_panel_at(p, 2, 0, UI_COLS);
-    ui_menu_v(9, 2, items, nums, 8, sel);
-    ui_message(20);
+    ui_menu_v(9, 0, items, nums, 8, sel);
+    ui_message(18);
 }
 
 /* Shows the game hub and returns the player choice. */

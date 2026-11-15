@@ -212,10 +212,10 @@ void showLeaderboard(void)
     char buf[96];
 
     ui_frame("Leaderboard");
-    ui_panel(4, 0, 50, 9, "Leaderboard (Top 5)");
+    ui_panel(2, 0, 50, 9, "Leaderboard (Top 5)");
 
     if (fp == NULL) {
-        render_text(8, 2, ST_DANGER, "Belum ada data leaderboard.");
+        render_text(3, 2, ST_DANGER, "Belum ada data leaderboard.");
     } else {
         while (rank < TOP_DISPLAY && fgets(line, sizeof line, fp) != NULL) {
             Style st;
@@ -224,14 +224,14 @@ void showLeaderboard(void)
             else if (rank == 1) st = ST_RARITY_COMMON;
             else if (rank == 2) st = ST_BRONZE;
             else st = ST_TEXT;
-            row = 5 + rank;
+            row = 3 + rank;
             snprintf(buf, sizeof buf, "%d. %-15s level %2d skor %d", rank + 1, name, level, score);
             render_text(row, 2, st, "%s", buf);
             rank++;
         }
         fclose(fp);
         if (rank == 0)
-            render_text(8, 2, ST_DANGER, "Belum ada data leaderboard.");
+            render_text(3, 2, ST_DANGER, "Belum ada data leaderboard.");
     }
 
     ui_footer(NULL);

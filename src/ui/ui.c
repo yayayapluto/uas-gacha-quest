@@ -108,11 +108,16 @@ Style ui_log_style_at(int i)
 
 void ui_frame(const char *screen)
 {
-    char label[64];
+    const Glyphs *g = caps_glyphs();
+    int i;
+
     render_clear();
-    render_text(0, 0, ST_TITLE, "Gacha Quest");
-    snprintf(label, sizeof label, "%s", screen);
-    render_text(0, UI_COLS - (int)ui_visible_len(label), ST_DIM, "%s", label);
+    if (caps_unicode())
+        render_text(0, 0, ST_TITLE, "GACHA QUEST · %s", screen);
+    else
+        render_text(0, 0, ST_TITLE, "GACHA QUEST > %s", screen);
+    for (i = 0; i < UI_COLS; i++)
+        render_text(1, i, ST_BORDER, "%s", g->hz);
 }
 
 void ui_flush(void) { render_flush(); }
@@ -181,7 +186,7 @@ void ui_wait_enter(const char *text)
     }
     {
         char ch;
-        render_text(UI_ROWS - 2, 0, ST_DIM, "%s", text);
+        render_text(render_max_row() + 2, 0, ST_DIM, "%s", text);
         ui_flush();
         for (;;) {
             TermKey k = term_getkey(&ch);

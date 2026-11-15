@@ -272,7 +272,7 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
             int r = ay - VIEW_HEIGHT / 2 + ty;
             int c = ax - VIEW_WIDTH / 2 + tx;
             char cell;
-            int srow = 2 + ty, scol = 2 + tx;
+            int srow = 2 + ty, scol = 1 + tx;
             if (ty == VIEW_HEIGHT / 2 && tx == VIEW_WIDTH / 2)
                 render_text(srow, scol, ST_TITLE, "P");
             else if (trail[r][c] == '*')
@@ -355,11 +355,11 @@ void runDungeon(Player *p)
 
     if (caps_interactive()) {
         ui_frame("Dungeon");
-        render_text(4, 2, ST_DIM,
+        render_text(2, 0, ST_DIM,
                     "Dunia dungeon dibangun dari seed %u. Masukkan seed ini lagi kapan saja untuk peta yang persis sama.", st.seed);
-        render_text(5, 2, ST_DIM,
+        render_text(3, 0, ST_DIM,
                     "Jalan ke segala arah. Kumpulkan treasure ($), lalu tekan Q kalau sudah puas.");
-        render_text(7, 2, ST_TEXT, "Tekan Enter untuk masuk:");
+        render_text(5, 0, ST_TEXT, "Tekan Enter untuk masuk:");
         ui_footer(NULL);
         ui_flush();
         {

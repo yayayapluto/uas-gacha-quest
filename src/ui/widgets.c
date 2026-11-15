@@ -93,7 +93,7 @@ void widget_footer(const char *extra)
     char buf[192];
     snprintf(buf, sizeof buf, "%s pilih  Enter konfirmasi  Esc kembali%s%s",
              caps_glyphs()->arrowUD, extra != NULL ? "  " : "", extra != NULL ? extra : "");
-    render_text(UI_ROWS - 1, 0, ST_DIM, "%s", buf);
+    render_text(render_max_row() + 2, 0, ST_DIM, "%s", buf);
 }
 
 void widget_msg(int row, int col, int w, const char *msg)

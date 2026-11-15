@@ -62,9 +62,9 @@ disetel.
 
 Aturan yang berlaku di semua terminal:
 
-- **Ukuran minimum 80x24.** Lebih kecil → pesan "Perbesar terminal (min 80x24)",
-  layout tidak digambar rusak. Di terminal lebih lebar, konten 78 kolom
-  dipusatkan.
+- **Ukuran minimum 50x20.** Lebih kecil → pesan "Perbesar terminal (min 50x20)",
+  layout tidak digambar rusak. Layout rata kiri dan padat: panel tetap 50 kolom,
+  sisa terminal dibiarkan kosong di kanan, footer langsung di bawah konten.
 - **Kontrol menu:** panah atas/bawah (atau `W`/`S`, `K`/`J`) + Enter; angka
   `0-9` langsung memilih item; `Esc`/`Q` kembali.
 - **Dungeon:** `W`/`A`/`S`/`D` atau panah untuk jalan langsung tanpa Enter,

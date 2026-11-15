@@ -72,10 +72,10 @@ void showStatus(const Player *p)
     ui_frame("Status");
     ui_status_panel_at(p, 2, 0, UI_COLS);
 
-    ui_panel(9, 0, 38, 11, "STATISTIK");
+    ui_panel(9, 0, 50, 11, "STATISTIK");
     snprintf(buf, sizeof buf, "Level      : %d (EXP %d/%d)", p->level, p->exp, expMax);
     render_text(10, 2, ST_TEXT, "%s", buf);
-    ui_bar(11, 2, 32, p->exp, expMax > 0 ? expMax : 1, ST_ACCENT);
+    ui_bar(11, 2, 44, p->exp, expMax > 0 ? expMax : 1, ST_ACCENT);
     snprintf(buf, sizeof buf, "ATK        : %d", totalAtk(p));
     render_text(12, 2, ST_TEXT, "%s", buf);
     snprintf(buf, sizeof buf, "DEF        : %d", totalDef(p));
@@ -91,20 +91,20 @@ void showStatus(const Player *p)
     snprintf(buf, sizeof buf, "Item       : %d/%d", p->itemCount, MAX_ITEM);
     render_text(18, 2, ST_TEXT, "%s", buf);
 
-    ui_panel(9, 40, 38, 11, "PERLENGKAPAN");
+    ui_panel(21, 0, 50, 4, "PERLENGKAPAN");
     if (p->weaponIndex >= 0) {
         const Item *w = &p->inventory[p->weaponIndex];
         snprintf(buf, sizeof buf, "Senjata: %s (power %d)", w->name, w->power);
-        render_text(12, 42, style_rarity(w->rarity), "%s", buf);
+        render_text(22, 2, style_rarity(w->rarity), "%s", buf);
     } else {
-        render_text(12, 42, ST_DIM, "Senjata: -");
+        render_text(22, 2, ST_DIM, "Senjata: -");
     }
     if (p->armorIndex >= 0) {
         const Item *a = &p->inventory[p->armorIndex];
         snprintf(buf, sizeof buf, "Armor  : %s (power %d)", a->name, a->power);
-        render_text(16, 42, style_rarity(a->rarity), "%s", buf);
+        render_text(23, 2, style_rarity(a->rarity), "%s", buf);
     } else {
-        render_text(16, 42, ST_DIM, "Armor  : -");
+        render_text(23, 2, ST_DIM, "Armor  : -");
     }
 
     ui_footer(NULL);

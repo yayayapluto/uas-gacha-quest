@@ -63,19 +63,19 @@ static void battleDraw(void *ctx, int sel)
     ui_frame("Battle");
     ui_status_panel_at(bc->p, 2, 0, UI_COLS);
 
-    ui_panel(9, 0, 40, 5, bc->enemy->name);
+    ui_panel(8, 0, 50, 5, bc->enemy->name);
     snprintf(buf, sizeof buf, "HP  %d/%d", bc->enemyHp, bc->enemy->hp);
-    render_text(10, 2, ST_TEXT, "%s", buf);
-    ui_hp_bar(11, 2, 32, bc->enemyHp, bc->enemy->hp);
+    render_text(9, 2, ST_TEXT, "%s", buf);
+    ui_hp_bar(10, 2, 44, bc->enemyHp, bc->enemy->hp);
     snprintf(buf, sizeof buf, "ATK %d | DEF %d", bc->enemy->atk, bc->enemy->def);
-    render_text(12, 2, ST_TEXT, "%s", buf);
+    render_text(11, 2, ST_TEXT, "%s", buf);
 
-    logRow = 16;
+    logRow = 14;
     start = ui_log_count() > 4 ? ui_log_count() - 4 : 0;
     for (i = start; i < ui_log_count(); i++)
         render_text(logRow++, 0, ui_log_style_at(i), "%s", ui_log_text(i));
 
-    ui_menu_v(21, 2, items, nums, 4, sel);
+    ui_menu_v(18, 0, items, nums, 4, sel);
     ui_footer(NULL);
 }
 

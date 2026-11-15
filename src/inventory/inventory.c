@@ -22,7 +22,7 @@ static void inventoryDraw(void *ctx, int sel)
     render_text(9, 0, ST_TITLE, "%s", buf);
     render_text(10, 0, ST_DIM, "%-4s %-20s %-4s %-10s %-5s %s",
                 "Idx", "Nama", "Tipe", "Rarity", "Power", "Terpasang");
-    for (i = 0, row = 11; i < p->itemCount && i < 8; i++, row++) {
+    for (i = 0, row = 11; i < p->itemCount && i < 6; i++, row++) {
         const char *eq = i == p->weaponIndex ? "[SENJATA]"
                        : (i == p->armorIndex ? "[ARMOR]" : "");
         render_text(row, 0, style_rarity(p->inventory[i].rarity),
@@ -35,7 +35,7 @@ static void inventoryDraw(void *ctx, int sel)
                     p->inventory[i].power, eq);
     }
 
-    ui_menu_v(20, 2, items, nums, 4, sel);
+    ui_menu_v(18, 0, items, nums, 4, sel);
     ui_footer(NULL);
 }
 

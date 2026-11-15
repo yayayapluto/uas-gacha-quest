@@ -22,15 +22,18 @@ lalu menunggu input. Tidak ada lagi output yang menumpuk ke bawah.
 
 ## Geometri dan layout
 
+Gaya rata kiri dan padat; tidak ada pemusatan horizontal.
+
 | Aturan | Nilai |
 |---|---|
-| Lebar konten | 78 kolom (`UI_COLS`), dipusatkan horizontal bila terminal lebih lebar |
-| Tinggi konten | 24 baris (`UI_ROWS`) |
-| Ukuran minimum | 80x24; bila lebih kecil tampil "Perbesar terminal (min 80x24)" |
-| Baris judul | "Gacha Quest" kiri, nama layar kanan (aksen) |
+| Lebar panel | tetap 50 kolom (`UI_COLS`), rata kiri; sisa terminal dibiarkan kosong di kanan |
+| Tinggi minimum | 20 baris (`UI_ROWS`); bila lebih kecil tampil "Perbesar terminal (min 50x20)" |
+| Baris judul | `GACHA QUEST · <nama layar>` rata kiri (ASCII: `GACHA QUEST > <nama layar>`), lalu satu baris garis |
 | Panel status pemain | nama, level, bar HP, gold, potion — di hub/battle/gacha/inventory/shop/status |
 | Panel pesan sistem | 1-5 baris terakhir menggantikan printf di tengah layar |
-| Footer | petunjuk tombol: "↑↓ pilih  Enter konfirmasi  Esc kembali" |
+| Footer | dicetak langsung di bawah konten, dipisah satu baris kosong: "↑↓ pilih  Enter konfirmasi  Esc kembali" |
+| Jarak antar blok | maksimal 1 baris kosong; padding dalam panel 1 spasi horizontal, 0 vertikal |
+| Highlight menu | hanya selebar teks item |
 | Bar HP/EXP | `█` terisi, `░` kosong (ASCII: `#` dan `-`) |
 
 ## Deteksi kemampuan (deteksi, bukan tebak)
@@ -115,20 +118,28 @@ karakter `█`/`░` saja. Info penting selalu disertai teks/simbol (mis. tag
 
 ## Tangkapan layar (ASCII, ANSI-stripped)
 
-Contoh frame showcase widget (panel, bar HP tiga ambang, menu ter-highlight):
+Contoh frame showcase widget (panel, bar HP tiga ambang, menu ter-highlight),
+rata kiri selebar 50 kolom:
 
 ```
-Gacha Quest                                                          Preview
-+Panel-----------------------------------------------------------------------+
-| text         title        accent       border       dim          gold      |
-| danger       success      common       rare         epic         legendary |
-|                                                                            |
-|  ###########-------      ########----------      ##----------------        |
-|                                                                            |
-|  ###########-----------------          ###################---------        |
-+----------------------------------------------------------------------------+
-  > 1. Pilihan dua
-    2. Pilihan tiga
+GACHA QUEST > Preview
+--------------------------------------------------
++Panel-------------------------------------------+
+| text        title       accent      border     |
+| dim         gold        danger      success    |
+| common      rare        epic        legendary  |
+|  #######-----    #####-------    #-----------  |
+|  ########------------    ##############------  |
++------------------------------------------------+
+  1. Pilihan satu
+> 2. Pilihan dua
+  3. Pilihan tiga
+
+  1. Pilihan satu    2. Pilihan dua    3. Pilihan tiga
+
+> Contoh pesan sistem.
+
+Up/Down pilih  Enter konfirmasi  Esc kembali
 ```
 
 ## Kode ANSI (legacy)
