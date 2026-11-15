@@ -4,6 +4,7 @@
 #include "gacha.h"
 #include "util.h"
 #include "ui.h"
+#include "render.h"
 
 const char *rarityName(int rarity)
 {
@@ -27,7 +28,6 @@ int duplicatePrice(int rarity)
     return 0;
 }
 
-/* Sequential search by item ID in the inventory; -1 when absent. */
 int findItemInInventory(const Player *p, int id)
 {
     int i;
@@ -36,7 +36,6 @@ int findItemInInventory(const Player *p, int id)
     return -1;
 }
 
-/* Rolls rarity from rand() % 100 + 1 and applies pity; updates *pity. */
 int rollRarity(int *pity)
 {
     int roll = rand() % 100 + 1;
@@ -59,7 +58,6 @@ int rollRarity(int *pity)
     return r;
 }
 
-/* One pull: pick a random item of the given rarity, convert duplicates to gold, print the result. */
 void pullOnce(Player *p, const Item catalog[], int count, int rarity)
 {
     Item candidates[MAX_ITEM];
@@ -76,39 +74,56 @@ void pullOnce(Player *p, const Item catalog[], int count, int rarity)
     if (index >= 0) {
         int price = duplicatePrice(candidates[picked].rarity);
         p->gold += price;
-        printf("  [%s%s%s] %s -> DUPLIKAT, jadi +%d gold\n",
-               rarity_color(rarity), rarityName(rarity), ANSI_RESET,
-               candidates[picked].name, price);
+        ui_log_style(style_rarity(rarity),
+                     "  [%s] %s -> DUPLIKAT, jadi +%d gold",
+                     rarityName(rarity), candidates[picked].name, price);
     } else if (p->itemCount < MAX_ITEM) {
         p->inventory[p->itemCount] = candidates[picked];
         p->itemCount++;
-        printf("  [%s%s%s] %s (power %d) -> baru!\n",
-               rarity_color(rarity), rarityName(rarity), ANSI_RESET,
-               candidates[picked].name, candidates[picked].power);
+        ui_log_style(style_rarity(rarity),
+                     "  [%s] %s (power %d) -> baru!",
+                     rarityName(rarity), candidates[picked].name, candidates[picked].power);
     }
 }
 
-/* Gacha menu: one pull, ten pulls, or back. */
+static void gachaDraw(void *ctx, int sel)
+{
+    static const char *items[] = { "Pull 1x (100 gold)", "Pull 10x (900 gold)", "Kembali" };
+    static const int nums[] = { 1, 2, 0 };
+    Player *p = ctx;
+    char buf[64];
+    int i, start, logRow;
+
+    ui_frame("Gacha");
+    ui_status_panel_at(p, 2, 0, UI_COLS);
+
+    ui_panel(9, 0, 40, 5, "PULL");
+    snprintf(buf, sizeof buf, "Pity      : %d/%d", p->pity, PITY_THRESHOLD);
+    render_text(10, 2, ST_TEXT, "%s", buf);
+    snprintf(buf, sizeof buf, "Total pull: %d", p->totalPull);
+    render_text(11, 2, ST_TEXT, "%s", buf);
+    ui_bar(12, 2, 32, p->pity, PITY_THRESHOLD, ST_GOLD);
+
+    logRow = 16;
+    start = ui_log_count() > 4 ? ui_log_count() - 4 : 0;
+    for (i = start; i < ui_log_count(); i++)
+        render_text(logRow++, 0, ui_log_style_at(i), "%s", ui_log_text(i));
+
+    ui_menu_v(21, 2, items, nums, 3, sel);
+    ui_footer(NULL);
+}
+
 void gachaMenu(Player *p, const Item catalog[], int count)
 {
-    int choice;
+    static const char *items[] = { "Pull 1x (100 gold)", "Pull 10x (900 gold)", "Kembali" };
+    static const int nums[] = { 1, 2, 0 };
 
     for (;;) {
-        clear_screen();
-        draw_header("GACHA", p);
-        draw_box_top("PULL");
-        draw_box_line("Pity    : %d/%d", p->pity, PITY_THRESHOLD);
-        draw_box_line("Total pull: %d", p->totalPull);
-        draw_box_bottom();
-        draw_menu(1, "Pull 1x (100 gold)");
-        draw_menu(2, "Pull 10x (900 gold)");
-        draw_menu(0, "Kembali");
-        if (last_message()[0] != '\0')
-            printf("%s%s%s\n", ANSI_CYAN, last_message(), ANSI_RESET);
-        printf("Pilih: ");
-        choice = readInt("", 0, 2);
-        set_message("");
+        int choice;
+        ui_log_clear();
+        choice = ui_menu_pick(items, nums, 3, 0, 2, gachaDraw, p);
         if (choice == 0) return;
+        ui_log_clear();
         if (choice == 1) {
             if (p->gold < PULL_COST) {
                 set_message("Gold kurang! Pull 1x butuh %d gold.", PULL_COST);
@@ -124,12 +139,13 @@ void gachaMenu(Player *p, const Item catalog[], int count)
                 continue;
             }
             p->gold -= PULL10_COST;
-            printf("Hasil pull 10x:\n");
+            ui_log("Hasil pull 10x:");
             for (i = 0; i < 10; i++) {
                 p->totalPull++;
                 pullOnce(p, catalog, count, rollRarity(&p->pity));
             }
         }
+        gachaDraw(p, -1);
         ui_wait_enter("Tekan Enter untuk lanjut...");
     }
 }

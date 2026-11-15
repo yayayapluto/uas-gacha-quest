@@ -6,23 +6,28 @@
 #include "inventory.h"
 #include "gacha.h"
 #include "ui.h"
+#include "render.h"
 
-/* Shop menu: buy potions or sell items. */
+static void shopDraw(void *ctx, int sel)
+{
+    static const char *items[] = { "Beli potion (40 gold)", "Jual item", "Kembali" };
+    static const int nums[] = { 1, 2, 0 };
+    Player *p = ctx;
+
+    ui_frame("Shop");
+    ui_status_panel_at(p, 2, 0, UI_COLS);
+    ui_menu_v(10, 2, items, nums, 3, sel);
+    ui_message(18);
+    ui_footer(NULL);
+}
+
 void shopMenu(Player *p)
 {
-    int choice;
+    static const char *items[] = { "Beli potion (40 gold)", "Jual item", "Kembali" };
+    static const int nums[] = { 1, 2, 0 };
 
     for (;;) {
-        clear_screen();
-        draw_header("SHOP", p);
-        draw_menu(1, "Beli potion (40 gold)");
-        draw_menu(2, "Jual item");
-        draw_menu(0, "Kembali");
-        if (last_message()[0] != '\0')
-            printf("%s%s%s\n", ANSI_CYAN, last_message(), ANSI_RESET);
-        printf("Pilih: ");
-        choice = readInt("", 0, 2);
-        set_message("");
+        int choice = ui_menu_pick(items, nums, 3, 0, 2, shopDraw, p);
         if (choice == 0) return;
         switch (choice) {
         case 1: {
@@ -37,8 +42,7 @@ void shopMenu(Player *p)
                 set_message("Gold tidak cukup untuk membeli potion.");
                 break;
             }
-            printf("Jumlah potion yang dibeli (1-%d): ", maxBuy);
-            amount = readInt("", 1, maxBuy);
+            amount = readInt("Jumlah potion yang dibeli (1-5): ", 1, maxBuy);
             p->gold -= amount * POTION_COST;
             p->potion += amount;
             set_message("Beli %d potion. Gold: %d, Potion: %d.", amount, p->gold, p->potion);
@@ -51,14 +55,12 @@ void shopMenu(Player *p)
                 set_message("Inventory kosong, tidak ada yang bisa dijual.");
                 break;
             }
-            printf("%-4s %-20s %-10s %-5s %s\n", "Idx", "Nama", "Rarity", "Power", "Harga jual");
-            for (i = 0; i < p->itemCount; i++) {
-                printf("%-4d %-20s %-10s %-5d %d\n",
-                       i, p->inventory[i].name, rarityName(p->inventory[i].rarity),
-                       p->inventory[i].power, duplicatePrice(p->inventory[i].rarity));
-            }
-            printf("Nomor indeks item yang dijual (999 batal): ");
-            index = readInt("", 0, 999);
+            for (i = 0; i < p->itemCount; i++)
+                ui_log_style(style_rarity(p->inventory[i].rarity),
+                             "%-4d %-20s %-10s %-5d %d",
+                             i, p->inventory[i].name, rarityName(p->inventory[i].rarity),
+                             p->inventory[i].power, duplicatePrice(p->inventory[i].rarity));
+            index = readInt("Nomor indeks item yang dijual (999 batal): ", 0, 999);
             if (index == 999) break;
             if (index >= p->itemCount) {
                 set_message("Indeks tidak ada di inventory.");

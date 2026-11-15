@@ -4,6 +4,7 @@
 #include "storage.h"
 #include "util.h"
 #include "ui.h"
+#include "render.h"
 
 /* Reads the item catalog; returns how many items were loaded. */
 int loadCatalog(const char *file, Item items[])
@@ -201,26 +202,38 @@ void recordScore(const Player *p)
     set_message("Skor %s (%d) dicatat ke leaderboard.", p->name, p->score);
 }
 
-/* Shows the top 5 of the leaderboard. */
+/* Shows the top 5 of the leaderboard as a ranked table. */
 void showLeaderboard(void)
 {
     FILE *fp = fopen("data/leaderboard.txt", "r");
     char line[512];
     char name[MAX_NAME];
-    int level, score, rank = 0;
+    int level, score, rank = 0, row;
+    char buf[96];
 
-    clear_screen();
-    printf("%s=== Leaderboard (Top %d) ===%s\n", ANSI_CYAN, TOP_DISPLAY, ANSI_RESET);
+    ui_frame("Leaderboard");
+    ui_panel(4, 0, 50, 9, "Leaderboard (Top 5)");
+
     if (fp == NULL) {
-        printf("Belum ada data leaderboard.\n");
-        return;
-    }
-    while (rank < TOP_DISPLAY && fgets(line, sizeof line, fp) != NULL) {
-        if (sscanf(line, "%29[^|]|%d|%d", name, &level, &score) == 3) {
-            printf("%d. %-15s level %2d skor %d\n", rank + 1, name, level, score);
+        render_text(8, 2, ST_DANGER, "Belum ada data leaderboard.");
+    } else {
+        while (rank < TOP_DISPLAY && fgets(line, sizeof line, fp) != NULL) {
+            Style st;
+            if (sscanf(line, "%29[^|]|%d|%d", name, &level, &score) != 3) continue;
+            if (rank == 0) st = ST_GOLD;
+            else if (rank == 1) st = ST_RARITY_COMMON;
+            else if (rank == 2) st = ST_BRONZE;
+            else st = ST_TEXT;
+            row = 5 + rank;
+            snprintf(buf, sizeof buf, "%d. %-15s level %2d skor %d", rank + 1, name, level, score);
+            render_text(row, 2, st, "%s", buf);
             rank++;
         }
+        fclose(fp);
+        if (rank == 0)
+            render_text(8, 2, ST_DANGER, "Belum ada data leaderboard.");
     }
-    if (rank == 0) printf("%sBelum ada data leaderboard.%s\n", ANSI_RED, ANSI_RESET);
-    fclose(fp);
+
+    ui_footer(NULL);
+    ui_flush();
 }
