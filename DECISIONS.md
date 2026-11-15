@@ -111,3 +111,16 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
 31. **Picker baris punya fallback pipa.** `ui_pick_row` kini menggambar sekali
     lalu membaca nomor baris saat stdin bukan terminal, sehingga jalur
     non-interaktif (uji pipa) bisa memilih slot seperti jalur interaktif.
+32. **Isi dungeon di-roll per chunk, bukan per sel.** Peluang per sel membuat
+    kepadatan bergantung pada berapa banyak lantai yang jatuh di dalam chunk.
+    Tiga roll per chunk (monster, chest, gold) membuat dunia terasa merata dan
+    jumlah isi sebanding jarak tempuh.
+33. **Hasil chest tidak memakai `plat_rand()`.** Loot diturunkan dari
+    `cellHash(seed, x, y)`, jadi membuka chest yang sama setelah reload memberi
+    isi yang sama dan animasi tidak bisa mengubah hasil.
+34. **Animasi slot tidak bisa memperlambat pemakaian.** Mode non-interaktif
+    langsung mencetak hasil, dan animasi hanya mengambil jalan `render_flush`
+    yang sudah ada, jadi harness pipa tetap cepat.
+35. **Palet biome di token `Style`, bukan di dungeon.** Cell menyimpan gaya
+    sendiri, dan `render_flush` perlu tahu kapan mengeluarkan latar; menaruh
+    palet di layer render membuat dungeon tidak perlu menyentuh ANSI.

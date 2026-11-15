@@ -22,6 +22,20 @@ static const Rgb pal[ST_HP_GRAD_BASE] = {
     { 0xCD, 0x7F, 0x32 }, /* ST_BRONZE */
     { 0x2D, 0x37, 0x48 }, /* ST_SELECTED (background) */
 };
+/* Dungeon biomes: only the wall palette changes, so the map keeps one shape
+   and the player still reads walls at a glance. fg is the wall glyph, bg the
+   block behind it. */
+static const struct { Rgb fg, bg; } biomes[BIOME_COUNT] = {
+    { { 0x6E, 0x7C, 0x93 }, { 0x2B, 0x33, 0x42 } }, /* stone */
+    { { 0x8A, 0x74, 0x52 }, { 0x3A, 0x2E, 0x1E } }, /* cavern */
+    { { 0x5A, 0x8B, 0x7A }, { 0x1E, 0x36, 0x30 } }, /* moss */
+    { { 0x8C, 0x6C, 0x9A }, { 0x33, 0x24, 0x3D } }, /* crystal */
+    { { 0x8E, 0x5A, 0x5A }, { 0x3B, 0x1F, 0x1F } }, /* ember */
+    { { 0x5A, 0x7A, 0x9E }, { 0x1C, 0x2A, 0x3D } }, /* frozen */
+    { { 0x9E, 0x8A, 0x5A }, { 0x3D, 0x33, 0x1C } }, /* desert */
+    { { 0x7A, 0x6E, 0x8E }, { 0x26, 0x22, 0x36 } }, /* void */
+};
+
 static const Rgb hpEnds[3] = {
     { 0x48, 0xBB, 0x78 }, /* hp_good */
     { 0xEC, 0xC9, 0x4B }, /* hp_mid */
@@ -94,9 +108,13 @@ static void buildBg(Style s, const Rgb *c)
 void style_init(void)
 {
     int i;
-    for (i = 0; i < ST_HP_GRAD_BASE; i++) {
+    for (i = 0; i < ST_BIOME_BASE; i++) {
         buildFg((Style)i, &pal[i]);
         buildBg((Style)i, &pal[i]);
+    }
+    for (i = 0; i < BIOME_COUNT; i++) {
+        buildFg(ST_BIOME(i), &biomes[i].fg);
+        buildBg(ST_BIOME(i), &biomes[i].bg);
     }
     /* HP gradient: good -> mid -> low, 11 slots */
     for (i = 0; i <= 10; i++) {

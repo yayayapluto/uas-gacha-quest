@@ -612,7 +612,11 @@ Jalan ke segala arah. Kumpulkan treasure ($), lalu tekan Q kalau sudah puas.
 Tekan Enter untuk masuk:
 ```
 
-Peta (25x15, `P` = pemain, `$` = treasure, `*` = jalur hint BFS, `#` = tembok):
+Peta (`P` = pemain, `$` = treasure, `G` = gold, `C` = chest, `M` = monster,
+`*` = jalur hint BFS. Tembok digambar sebagai blok berwarna sesuai biome, dan
+hanya sel dalam radius 6 dari pemain yang terlihat. Ukuran peta mengikuti
+terminal: lebar = lebar terminal - 2, tinggi = tinggi terminal - 10, dibatasi
+maksimum 25x15 dan minimum 11x7.)
 
 ```
 .#####.#####.#####.#####.
@@ -636,6 +640,19 @@ Peta (25x15, `P` = pemain, `$` = treasure, `*` = jalur hint BFS, `#` = tembok):
 | ####################        seed 12345         |
 +------------------------------------------------+
 Area awal tersambung dari titik awal sampai ujung koridor (DFS).
+
+Isi chunk (roll per 16x16, dari seed):
+
+| Marker | Peluang | Efek |
+| --- | --- | --- |
+| `M` | 45% | Battle melawan monster acak katalog |
+| `C` | 35% | Buka chest: 55% equipment, 25% potion, sisanya gold 40-120 |
+| `G` | 55% | Gold 10-40 langsung masuk |
+
+Equipment dari chest memakai bobot rarity yang sama dengan gacha
+(Common 60 / Rare 25 / Epic 12 / Legendary 3 setelah pity tidak berlaku),
+lalu memilih item katalog dengan rarity tersebut. Chest menampilkan animasi
+slot horizontal di panel `Gacha` sebelum hasilnya tampil.
 Gerak (W/A/S/D, H hint 30 gold, Q keluar):
 ```
 

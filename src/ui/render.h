@@ -3,8 +3,10 @@
 
 #include "style.h"
 
-#define UI_COLS 50          /* fixed content width, left aligned */
-#define UI_ROWS 20          /* minimum terminal height */
+#define UI_COLS 50          /* baseline width of the fixed layouts */
+#define UI_ROWS 20          /* baseline height of the fixed layouts */
+#define MIN_COLS 40         /* below this the grid is unreadable, so refuse */
+#define MIN_ROWS 18
 #define GRID_MAX_ROWS 64
 #define GRID_MAX_COLS 200
 

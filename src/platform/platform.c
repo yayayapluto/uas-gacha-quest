@@ -1,5 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include "platform.h"
 #include "sig.h"
 #include "crash.h"
@@ -44,4 +48,19 @@ void platform_shutdown(void)
     autosave_stop();
     sig_cleanup_done();
     lock_mark_clean();
+}
+
+void platform_sleep_ms(int ms)
+{
+    if (ms <= 0) return;
+#ifdef _WIN32
+    Sleep((DWORD)ms);
+#else
+    {
+        struct timespec ts;
+        ts.tv_sec = ms / 1000;
+        ts.tv_nsec = (long)(ms % 1000) * 1000000L;
+        nanosleep(&ts, NULL);
+    }
+#endif
 }

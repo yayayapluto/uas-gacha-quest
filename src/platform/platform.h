@@ -10,5 +10,6 @@ void platform_init(void);              /* exits with a message if locked */
 int platform_previous_running(void);   /* last session was RUNNING (crash/kill) */
 int platform_shutdown_requested(void); /* shutdown signal arrived */
 void platform_shutdown(void);          /* idempotent; CLEAN is written last */
+void platform_sleep_ms(int ms);        /* short pause for frame pacing */
 
 #endif

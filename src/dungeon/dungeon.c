@@ -15,6 +15,8 @@
 #include "rng.h"
 #include "platform.h"
 #include "autosave.h"
+#include "battle.h"
+#include "gacha.h"
 
 #define VIEW_WIDTH 25
 #define VIEW_HEIGHT 15
@@ -46,14 +48,61 @@ unsigned int cellHash(unsigned int seed, int x, int y)
     return h;
 }
 
-/* World cell derived from the seed: corridors on y = 1 (mod 4) and shafts on x = 1 (mod 6),
-   with deterministic treasure at roughly one cell in 89. */
+/* True when the chunk holds this content type. Chunk-wide rolls keep the odds
+   a property of the chunk, not of how much floor happens to fall inside it. */
+static int chunkHas(unsigned int seed, int chunkX, int chunkY, int kind, int pct)
+{
+    unsigned int h = cellHash(seed ^ (0x9E3779B9u * (unsigned int)kind), chunkX, chunkY);
+    return (int)(h % 100u) < pct;
+}
+
+/* Hash-searches the chunk for the n-th floor cell; -1 when the chunk has fewer. */
+static int chunkFloorCell(unsigned int seed, int chunkX, int chunkY, int n,
+                          int *outX, int *outY)
+{
+    int i, seen = 0;
+    /* the chunk is only 256 cells, so a full scan keyed by a hashed start is
+       cheaper and safer than a permutation that can repeat for non-coprime steps */
+    int start = (int)(cellHash(seed, chunkX + n, chunkY) % (CHUNK_SIZE * CHUNK_SIZE));
+    int x0 = chunkX * CHUNK_SIZE, y0 = chunkY * CHUNK_SIZE;
+
+    for (i = 0; i < CHUNK_SIZE * CHUNK_SIZE; i++) {
+        int off = (start + i) % (CHUNK_SIZE * CHUNK_SIZE);
+        int x = x0 + off % CHUNK_SIZE, y = y0 + off / CHUNK_SIZE;
+        int shaftX = floorMod(x, 6), corridorY = floorMod(y, 4);
+        if (shaftX != 1 && corridorY != 1) continue;
+        if (seen++ == n) {
+            *outX = x;
+            *outY = y;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* World cell derived from the seed: corridors on y = 1 (mod 4) and shafts on
+   x = 1 (mod 6). Each 16x16 chunk rolls independently for a monster, a chest,
+   and a gold pile, then picks a floor cell for each one that hit. */
 char dungeonCell(unsigned int seed, int x, int y)
 {
     int shaftX = floorMod(x, 6);
     int corridorY = floorMod(y, 4);
+    int chunkX = floorDiv(x, CHUNK_SIZE), chunkY = floorDiv(y, CHUNK_SIZE);
+    int i;
+    static const struct { int kind, pct; char mark; } contents[] = {
+        { 1, CHUNK_MONSTER_PCT, 'M' },
+        { 2, CHUNK_CHEST_PCT, 'C' },
+        { 3, CHUNK_GOLD_PCT, 'G' },
+    };
+
     if (shaftX != 1 && corridorY != 1) return '#';
     if (x == 1 && y == 1) return '.';
+    for (i = 0; i < 3; i++) {
+        int cx, cy;
+        if (!chunkHas(seed, chunkX, chunkY, contents[i].kind, contents[i].pct)) continue;
+        if (chunkFloorCell(seed, chunkX, chunkY, i + 1, &cx, &cy) && cx == x && cy == y)
+            return contents[i].mark;
+    }
     if (cellHash(seed, x, y) % 89u == 0) return 'T';
     return '.';
 }
@@ -62,7 +111,7 @@ static int alreadyTaken(const DungeonState *st, int x, int y)
 {
     int i;
     for (i = 0; i < st->takenCount; i++)
-        if (st->takenTreasures[i].row == y && st->takenTreasures[i].col == x) return 1;
+        if (st->taken[i].row == y && st->taken[i].col == x) return 1;
     return 0;
 }
 
@@ -74,7 +123,8 @@ static void buildArea(DungeonState *st, char area[][AREA_MAX])
         for (c = 0; c < AREA_MAX; c++) {
             int wx = st->originX + c, wy = st->originY + r;
             char cell = dungeonCell(st->seed, wx, wy);
-            if (cell == 'T' && alreadyTaken(st, wx, wy)) cell = '.';
+            if ((cell == 'T' || cell == 'G' || cell == 'C' || cell == 'M') && alreadyTaken(st, wx, wy))
+                cell = '.';
             area[r][c] = cell;
         }
 }
@@ -250,29 +300,248 @@ static void printDungeonStatus(const DungeonState *st, const Player *p, int step
            ANSI_RESET, bar, p->gold, st->seed);
 }
 
+/* Marks a content cell as used, so it never spawns again in this run. */
+static void consumeCell(DungeonState *st, int x, int y, char area[][AREA_MAX])
+{
+    if (st->takenCount < MAX_TAKEN_CELLS) {
+        st->taken[st->takenCount].row = y;
+        st->taken[st->takenCount].col = x;
+        st->takenCount++;
+    }
+    area[y - st->originY][x - st->originX] = '.';
+}
+
+/* Chest loot: equipment rolls a rarity with the same weights as gacha, then
+   picks an item of that rarity from the catalog. */
+typedef struct {
+    int kind;          /* 0 gold, 1 potion, 2 equipment */
+    int amount;
+    Item item;
+    int rarity;
+} Loot;
+
+static void rollLoot(unsigned int seed, int x, int y, const Item catalog[], int catalogCount,
+                     Loot *out)
+{
+    int roll = (int)(cellHash(seed ^ 0x5bf03635u, x, y) % 100u);
+
+    memset(out, 0, sizeof *out);
+    if (roll < CHEST_EQUIPMENT_PCT) {
+        int rarity = (int)(cellHash(seed ^ 0x2545f491u, x, y) % 100u) + 1;
+        Item candidates[MAX_ITEM];
+        int n = 0, i;
+
+        if (rarity >= 98) out->rarity = RARITY_LEGENDARY;
+        else if (rarity >= 86) out->rarity = RARITY_EPIC;
+        else if (rarity >= 61) out->rarity = RARITY_RARE;
+        else out->rarity = RARITY_COMMON;
+        for (i = 0; i < catalogCount; i++)
+            if (catalog[i].rarity == out->rarity) candidates[n++] = catalog[i];
+        if (n > 0) {
+            out->kind = 2;
+            out->item = candidates[cellHash(seed, x, y) % (unsigned int)n];
+            return;
+        }
+        out->kind = 0;
+        out->amount = CHEST_GOLD_MAX;
+        return;
+    }
+    if (roll < CHEST_EQUIPMENT_PCT + CHEST_POTION_PCT) {
+        out->kind = 1;
+        out->amount = CHEST_POTION_COUNT;
+        return;
+    }
+    out->kind = 0;
+    out->amount = CHEST_GOLD_MIN
+                  + (int)(cellHash(seed, x, y) % (unsigned int)(CHEST_GOLD_MAX - CHEST_GOLD_MIN + 1));
+}
+
+/* Horizontal slot: a strip of rarity cells slides right-to-left past a
+   viewport and decelerates onto the result. The outcome is already fixed by
+   the seed, so the animation never changes it. */
+#define SLOT_CELL 8
+#define SLOT_VIEW 32
+
+static int slotRarityAt(int index, int salt)
+{
+    return (int)(cellHash((unsigned int)salt * 2654435761u, index, 7) % 4u) + 1;
+}
+
+static void chestAnimation(const Loot *loot)
+{
+    static const char *names[] = { "Common", "Rare", "Epic", "Legendary" };
+    int frame, i, offset = 0, speed = 26;
+
+    if (!caps_interactive()) return;
+    for (frame = 0;; frame++) {
+        int done = frame >= 28;
+        int win = (SLOT_VIEW / SLOT_CELL / 2) * SLOT_CELL;
+
+        if (!done) {
+            offset += frame < 8 ? 3 : (frame < 16 ? 2 : 1);
+            speed += 6;
+        } else {
+            offset = win;
+        }
+
+        ui_frame("Chest");
+        ui_panel(7, 0, UI_COLS, 7, done ? "Hasil" : "Gacha");
+        for (i = 0; i <= SLOT_VIEW / SLOT_CELL; i++) {
+            int x = i * SLOT_CELL - offset % SLOT_CELL;
+            int index = i + offset / SLOT_CELL;
+            int rarity = done ? (index == SLOT_VIEW / SLOT_CELL / 2 ? loot->rarity
+                                                                   : slotRarityAt(index, 0))
+                              : slotRarityAt(index, 0);
+            if (x < 0 || x + 7 > SLOT_VIEW) continue;
+            render_text(9, 2 + x, done ? style_rarity(rarity) : ST_DIM, "%-7s", names[rarity - 1]);
+        }
+        render_text(11, 6, ST_ACCENT, "%s", done ? "^" : "");
+        ui_footer(NULL);
+        ui_flush();
+        if (done) break;
+        platform_sleep_ms(speed > 120 ? 120 : speed);
+    }
+}
+
+/* Applies what the player stepped on and writes the message for the frame. */
+static void handleContent(Player *p, const Monster monsters[], int monsterCount,
+                          const Item catalog[], int catalogCount,
+                          char cell, int wx, int wy, char area[][AREA_MAX],
+                          char *message)
+{
+    if (cell == 'T') {
+        p->gold += TREASURE_GOLD;
+        sprintf(message, "Treasure! +%d gold.", TREASURE_GOLD);
+        return;
+    }
+    if (cell == 'G') {
+        int amount = DUNGEON_GOLD_MIN
+                     + (int)(cellHash(p->seed ^ 0x27d4eb2fu, wx, wy)
+                             % (unsigned int)(DUNGEON_GOLD_MAX - DUNGEON_GOLD_MIN + 1));
+        p->gold += amount;
+        sprintf(message, "Gold! +%d gold.", amount);
+        return;
+    }
+    if (cell == 'M') {
+        if (monsterCount > 0) {
+            const Monster *m = &monsters[cellHash(p->seed ^ 0x1b873593u, wx, wy)
+                                         % (unsigned int)monsterCount];
+            sprintf(message, "Monster %s muncul!", m->name);
+            startBattle(p, m, 1);
+        }
+        return;
+    }
+    if (cell == 'C') {
+        Loot loot;
+        rollLoot(p->seed, wx, wy, catalog, catalogCount, &loot);
+        chestAnimation(&loot);
+        if (loot.kind == 2) {
+            int index = findItemInInventory(p, loot.item.id);
+            if (index >= 0) {
+                int price = duplicatePrice(loot.item.rarity);
+                p->gold += price;
+                sprintf(message, "Chest: %s (duplikat) jadi +%d gold.", loot.item.name, price);
+            } else if (p->itemCount < MAX_ITEM) {
+                p->inventory[p->itemCount++] = loot.item;
+                sprintf(message, "Chest: [%s] %s (power %d)!",
+                        rarityName(loot.item.rarity), loot.item.name, loot.item.power);
+            } else {
+                p->gold += duplicatePrice(loot.item.rarity);
+                sprintf(message, "Inventory penuh, %s dijual jadi +%d gold.",
+                        loot.item.name, duplicatePrice(loot.item.rarity));
+            }
+        } else if (loot.kind == 1) {
+            p->potion += loot.amount;
+            if (p->potion > MAX_POTION) p->potion = MAX_POTION;
+            sprintf(message, "Chest: +%d potion.", loot.amount);
+        } else {
+            p->gold += loot.amount;
+            sprintf(message, "Chest: +%d gold.", loot.amount);
+        }
+        (void)area;
+    }
+}
+
 /* Draws a window of the cached area with the player always in the middle. */
+/* Visible radius: cells further than this from the player stay hidden, so
+   chunks are still cached around him but only the nearby part is drawn. */
+#define FOG_RADIUS 6
+
+/* View size follows the terminal: width is the terminal width minus the map
+   margins, height is what is left above the status and message rows. */
+static void viewSize(int *w, int *h)
+{
+    int cols = caps_interactive() ? caps_cols() : UI_COLS;
+    int rows = caps_interactive() ? caps_rows() : UI_ROWS;
+    *w = cols - 2;
+    *h = rows - 10;
+    if (*w > VIEW_WIDTH) *w = VIEW_WIDTH;
+    if (*h > VIEW_HEIGHT) *h = VIEW_HEIGHT;
+    if (*w < 11) *w = 11;
+    if (*h < 7) *h = 7;
+}
+
+/* Biome of a world position: each 32x32 block maps to one palette, so walking
+   far enough changes the wall colors without touching the map shape. */
+static Style biomeStyle(unsigned int seed, int x, int y)
+{
+    unsigned int h = cellHash(seed ^ 0x7f4a7c15u, floorDiv(x, 32), floorDiv(y, 32));
+    return ST_BIOME((int)(h % BIOME_COUNT));
+}
+
+/* Draws one map cell: trail first, then the world, hidden beyond the fog. */
+static void drawCell(unsigned int seed, char area[][AREA_MAX], char trail[][AREA_MAX],
+                     int r, int c, int wx, int wy, int fogged,
+                     int interactive, int srow, int scol)
+{
+    char cell;
+
+    if (fogged) {
+        if (interactive) render_text(srow, scol, ST_DIM, " ");
+        else printf(" ");
+        return;
+    }
+    if (trail[r][c] == '*') {
+        if (interactive) render_text(srow, scol, ST_ACCENT, "*");
+        else printf("*");
+        return;
+    }
+    cell = area[r][c];
+    if (!interactive) {
+        printf("%c", cell == 'T' ? '$' : cell);
+        return;
+    }
+    switch (cell) {
+    case '#': render_text(srow, scol, biomeStyle(seed, wx, wy), " "); break;
+    case '.': render_text(srow, scol, ST_DIM, "."); break;
+    case 'T': render_text(srow, scol, ST_GOLD, "$"); break;
+    case 'G': render_text(srow, scol, ST_GOLD, "G"); break;
+    case 'C': render_text(srow, scol, ST_GOLD, "C"); break;
+    case 'M': render_text(srow, scol, ST_DANGER, "M"); break;
+    default: render_text(srow, scol, ST_DIM, "%c", cell); break;
+    }
+}
+
 static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
                           char trail[][AREA_MAX], const char *message, int steps,
                           const Player *p)
 {
     int ax = st->posX - st->originX;
     int ay = st->posY - st->originY;
-    int tx, ty;
+    int vw, vh, tx, ty;
+    int wid = caps_interactive() ? caps_cols() : UI_COLS;
+
+    viewSize(&vw, &vh);
 
     if (!caps_interactive()) {
         clear_screen();
-        for (ty = 0; ty < VIEW_HEIGHT; ty++) {
-            for (tx = 0; tx < VIEW_WIDTH; tx++) {
-                int r = ay - VIEW_HEIGHT / 2 + ty;
-                int c = ax - VIEW_WIDTH / 2 + tx;
-                char cell;
-                if (ty == VIEW_HEIGHT / 2 && tx == VIEW_WIDTH / 2) printf("P");
-                else if (trail[r][c] == '*') printf("*");
-                else {
-                    cell = area[r][c];
-                    if (cell == 'T') printf("$");
-                    else printf("%c", cell);
-                }
+        for (ty = 0; ty < vh; ty++) {
+            for (tx = 0; tx < vw; tx++) {
+                int dr = ty - vh / 2, dc = tx - vw / 2;
+                if (ty == vh / 2 && tx == vw / 2) printf("P");
+                else drawCell(st->seed, area, trail, ay + dr, ax + dc,
+                              st->posX + dc, st->posY + dr,
+                              dr * dr + dc * dc > FOG_RADIUS * FOG_RADIUS, 0, 0, 0);
             }
             printf("\n");
         }
@@ -284,34 +553,26 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
     }
 
     ui_frame("Dungeon");
-    for (ty = 0; ty < VIEW_HEIGHT; ty++) {
-        for (tx = 0; tx < VIEW_WIDTH; tx++) {
-            int r = ay - VIEW_HEIGHT / 2 + ty;
-            int c = ax - VIEW_WIDTH / 2 + tx;
-            char cell;
+    for (ty = 0; ty < vh; ty++) {
+        for (tx = 0; tx < vw; tx++) {
+            int dr = ty - vh / 2, dc = tx - vw / 2;
             int srow = 2 + ty, scol = 1 + tx;
-            if (ty == VIEW_HEIGHT / 2 && tx == VIEW_WIDTH / 2)
+            if (ty == vh / 2 && tx == vw / 2)
                 render_text(srow, scol, ST_TITLE, "P");
-            else if (trail[r][c] == '*')
-                render_text(srow, scol, ST_ACCENT, "*");
-            else {
-                cell = area[r][c];
-                if (cell == 'T') render_text(srow, scol, ST_GOLD, "$");
-                else if (cell == '#') render_text(srow, scol, ST_DIM, "#");
-                else if (cell == '.') render_text(srow, scol, ST_DIM, ".");
-                else if (cell == ' ') render_text(srow, scol, ST_DIM, " ");
-                else render_text(srow, scol, ST_DIM, "%c", cell);
-            }
+            else
+                drawCell(st->seed, area, trail, ay + dr, ax + dc,
+                         st->posX + dc, st->posY + dr,
+                         dr * dr + dc * dc > FOG_RADIUS * FOG_RADIUS, 1, srow, scol);
         }
     }
-    ui_panel(17, 0, UI_COLS, 5, "Status");
-    render_text_clipped(18, 2, UI_COLS - 4, ST_TEXT, "Posisi dunia (%d,%d)", st->posX, st->posY);
+    ui_panel(17, 0, wid, 5, "Status");
+    render_text_clipped(18, 2, wid - 4, ST_TEXT, "Posisi dunia (%d,%d)", st->posX, st->posY);
     render_text_clipped(18, 21, 10, ST_TEXT, "langkah %d", steps);
     render_text_clipped(18, 34, 12, ST_GOLD, "gold %d", p->gold);
     render_text(19, 2, style_hp(p->hp, p->maxHp), "HP %d/%d", p->hp, p->maxHp);
     ui_hp_bar(20, 2, 24, p->hp, p->maxHp);
-    render_text_clipped(20, 28, UI_COLS - 30, ST_DIM, "seed %u", st->seed);
-    render_text_clipped(22, 2, UI_COLS - 4, ST_DIM, "%s", message);
+    render_text_clipped(20, 28, wid - 30, ST_DIM, "seed %u", st->seed);
+    render_text_clipped(22, 2, wid - 4, ST_DIM, "%s", message);
     render_text(23, 2, ST_DIM, "Gerak (W/A/S/D, H hint %d gold, Q keluar)", HINT_COST);
     ui_footer(NULL);
     ui_flush();
@@ -391,7 +652,9 @@ unsigned int promptWorldSeed(void)
 /* Turn loop shared by a fresh run and a restored session. */
 static void dungeonLoop(Player *p, DungeonState *st, char area[][AREA_MAX],
                         char trail[][AREA_MAX], Point path[],
-                        int steps, int hintsUsed, const char *initialMsg)
+                        int steps, int hintsUsed, const char *initialMsg,
+                        const Item catalog[], int catalogCount,
+                        const Monster monsters[], int monsterCount)
 {
     int finished = 0;
     char message[128];
@@ -444,17 +707,12 @@ static void dungeonLoop(Player *p, DungeonState *st, char area[][AREA_MAX],
                     steps++;
                     ensureArea(st, area);
                     memset(trail, ' ', (size_t)AREA_MAX * AREA_MAX);
-                    if (cell == 'T' && !alreadyTaken(st, wx, wy)) {
-                        if (st->takenCount < MAX_TAKEN_TREASURES) {
-                            st->takenTreasures[st->takenCount].row = wy;
-                            st->takenTreasures[st->takenCount].col = wx;
-                            st->takenCount++;
-                        }
-                        area[wy - st->originY][wx - st->originX] = '.';
-                        p->gold += TREASURE_GOLD;
-                        treasure = 1;
-                        sprintf(message, "Treasure! +%d gold. Sudah %d treasure di run ini.",
-                                TREASURE_GOLD, st->takenCount);
+                    if ((cell == 'T' || cell == 'G' || cell == 'C' || cell == 'M')
+                        && !alreadyTaken(st, wx, wy)) {
+                        consumeCell(st, wx, wy, area);
+                        treasure = (cell == 'T' || cell == 'G' || cell == 'C');
+                        handleContent(p, monsters, monsterCount, catalog, catalogCount,
+                                      cell, wx, wy, area, message);
                     } else {
                         sprintf(message, "Posisi (%d,%d), langkah %d.", wx, wy, steps);
                     }
@@ -507,7 +765,8 @@ static void dungeonLoop(Player *p, DungeonState *st, char area[][AREA_MAX],
     if (!finished && !caps_interactive()) printf("\033[?25h");
 }
 
-void runDungeon(Player *p)
+void runDungeon(Player *p, const Item catalog[], int catalogCount,
+                const Monster monsters[], int monsterCount)
 {
     char area[AREA_MAX][AREA_MAX];
     char trail[AREA_MAX][AREA_MAX];
@@ -564,11 +823,14 @@ void runDungeon(Player *p)
     else
         strcpy(message, "Area awal tidak tersambung.");
 
-    dungeonLoop(p, &st, area, trail, path, 0, 0, message);
+    dungeonLoop(p, &st, area, trail, path, 0, 0, message, catalog, catalogCount,
+                monsters, monsterCount);
 }
 
 /* Continues a dungeon run restored from the autosave at the same position. */
-void resumeDungeon(Player *p, const DungeonState *saved, int steps, int hints)
+void resumeDungeon(Player *p, const DungeonState *saved, int steps, int hints,
+                   const Item catalog[], int catalogCount,
+                   const Monster monsters[], int monsterCount)
 {
     char area[AREA_MAX][AREA_MAX];
     char trail[AREA_MAX][AREA_MAX];
@@ -577,5 +839,6 @@ void resumeDungeon(Player *p, const DungeonState *saved, int steps, int hints)
 
     buildArea(&st, area);
     memset(trail, ' ', sizeof trail);
-    dungeonLoop(p, &st, area, trail, path, steps, hints, "Sesi dipulihkan dari autosave.");
+    dungeonLoop(p, &st, area, trail, path, steps, hints, "Sesi dipulihkan dari autosave.",
+                catalog, catalogCount, monsters, monsterCount);
 }

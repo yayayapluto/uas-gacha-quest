@@ -18,11 +18,14 @@ typedef enum {
     ST_RARITY_LEGENDARY,
     ST_BRONZE,
     ST_SELECTED,    /* selection background; foreground chosen by the widget */
-    ST_HP_GRAD_BASE,/* +0..10 gradient slots, do not use directly */
+    ST_BIOME_BASE,  /* +0..7 dungeon biome wall styles, do not use directly */
+    ST_HP_GRAD_BASE = ST_BIOME_BASE + 8, /* +0..10 gradient slots */
     ST_COUNT
 } Style;
 
 #define ST_HP_GRAD(i) ((Style)(ST_HP_GRAD_BASE + (i)))
+#define ST_BIOME(i) ((Style)(ST_BIOME_BASE + (i)))
+#define BIOME_COUNT 8
 
 void style_init(void);           /* build ANSI strings for the detected mode */
 

@@ -80,7 +80,13 @@ driver "S12/S14 dungeon prosedur: seed deterministik, DFS & BFS" bin/t_dungeon
 rm -f data/autosave.dat data/autosave.bak
 driver "S17 autosave atomik: CRC, .bak, kunci sesi" bin/t_platform
 
+# slot files from earlier scenarios would make saveSlotFirstFree pick another
+# slot, so the round-trip driver starts from an empty slot set
+mkdir -p data/uji.bak
+for f in data/save_*.txt data/save.txt; do [ -f "$f" ] && mv -f "$f" "data/uji.bak/$(basename "$f")"; done
 driver "S10 save-load round trip" bin/t_storage
+for f in data/uji.bak/save_*.txt data/uji.bak/save.txt; do [ -f "$f" ] && mv -f "$f" "data/$(basename "$f")"; done
+rmdir data/uji.bak 2>/dev/null
 driver "S15 leaderboard urut & top 10" bin/t_leaderboard
 
 driver "S01/S02 bacaAngka & bacaString" bin/t_util tests/in_util.txt
