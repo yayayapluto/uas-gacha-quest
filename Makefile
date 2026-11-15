@@ -19,6 +19,7 @@ CC_SAN = $(CC)
 endif
 
 .PHONY: all clean test debug preview
+.DEFAULT_GOAL := all
 
 preview: $(BIN)/ui_preview
 	$(BIN)/ui_preview
