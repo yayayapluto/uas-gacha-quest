@@ -6,6 +6,7 @@
 #include "util.h"
 #include "ui.h"
 #include "render.h"
+#include "autosave.h"
 
 static void inventoryDraw(void *ctx, int sel)
 {
@@ -65,6 +66,7 @@ void inventoryMenu(Player *p)
             mode = readInt("Urutkan berdasarkan (1 rarity, 2 power, 3 nama): ", 1, 3);
             sortInventory(p, mode);
             set_message("Inventory terurut.");
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
             break;
         }
         case 2: {
@@ -90,6 +92,7 @@ void inventoryMenu(Player *p)
             }
             equipItem(p, index);
             set_message("%s dipasang.", p->inventory[index].name);
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
             break;
         }
         }

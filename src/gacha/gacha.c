@@ -5,6 +5,8 @@
 #include "util.h"
 #include "ui.h"
 #include "render.h"
+#include "rng.h"
+#include "autosave.h"
 
 const char *rarityName(int rarity)
 {
@@ -38,7 +40,7 @@ int findItemInInventory(const Player *p, int id)
 
 int rollRarity(int *pity)
 {
-    int roll = rand() % 100 + 1;
+    int roll = plat_rand() % 100 + 1;
     int r;
 
     if (roll >= 98) r = RARITY_LEGENDARY;
@@ -69,7 +71,7 @@ void pullOnce(Player *p, const Item catalog[], int count, int rarity)
             candidateCount++;
         }
     if (candidateCount == 0) return;
-    picked = rand() % candidateCount;
+    picked = plat_rand() % candidateCount;
     index = findItemInInventory(p, candidates[picked].id);
     if (index >= 0) {
         int price = duplicatePrice(candidates[picked].rarity);
@@ -132,6 +134,7 @@ void gachaMenu(Player *p, const Item catalog[], int count)
             p->gold -= PULL_COST;
             p->totalPull++;
             pullOnce(p, catalog, count, rollRarity(&p->pity));
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
         } else {
             int i;
             if (p->gold < PULL10_COST) {
@@ -144,6 +147,7 @@ void gachaMenu(Player *p, const Item catalog[], int count)
                 p->totalPull++;
                 pullOnce(p, catalog, count, rollRarity(&p->pity));
             }
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
         }
         gachaDraw(p, -1);
         ui_wait_enter("Tekan Enter untuk lanjut...");

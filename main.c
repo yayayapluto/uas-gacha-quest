@@ -14,6 +14,9 @@
 #include "ui.h"
 #include "render.h"
 #include "caps.h"
+#include "platform.h"
+#include "autosave.h"
+#include "rng.h"
 
 /* Shows the main menu and returns the player choice. */
 static void mainMenuDraw(void *ctx, int sel)
@@ -64,7 +67,16 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
     int saved = 0;
 
     for (;;) {
-        int choice = hubMenu(p);
+        int choice;
+        char err[160];
+        if (platform_shutdown_requested()) return;
+        if (autosave_poll_error(err, (int)sizeof err))
+            set_message("Autosave gagal: %s", err);
+        choice = hubMenu(p);
+        if (choice < 0 || platform_shutdown_requested()) {
+            if (!platform_shutdown_requested()) autosave_publish(p, AS_SCREEN_MENU, NULL, 0, NULL, 0, 0, 1);
+            return;
+        }
         switch (choice) {
         case 1: startBattle(p, monsters, monsterCount); break;
         case 2: gachaMenu(p, catalog, catalogCount); break;
@@ -81,6 +93,7 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
                 if (answer[0] == 'y' || answer[0] == 'Y') saveGame(p);
             }
             recordScore(p);
+            autosave_publish(p, AS_SCREEN_MENU, NULL, 0, NULL, 0, 0, 1);
             if (last_message()[0] != '\0')
                 set_message("%s Kembali ke menu utama.", last_message());
             else
@@ -93,16 +106,44 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
 }
 
 /* Entry point: load catalog and monsters, then run the main menu loop. */
+static void resumeSession(const AutoSnapshot *snap, const Item catalog[], int catalogCount,
+                          const Monster monsters[], int monsterCount)
+{
+    Player p = snap->player;
+    plat_rng_set(snap->rng);
+    switch (snap->screen) {
+    case AS_SCREEN_BATTLE:
+        if (snap->battleActive) {
+            resumeBattle(&p, snap->battleEnemy, snap->battleEnemyHp);
+            runHub(&p, catalog, catalogCount, monsters, monsterCount);
+            return;
+        }
+        break;
+    case AS_SCREEN_DUNGEON:
+        if (snap->dungeonActive) {
+            resumeDungeon(&p, &snap->dungeon, snap->dungeonSteps, snap->dungeonHints);
+            runHub(&p, catalog, catalogCount, monsters, monsterCount);
+            return;
+        }
+        break;
+    default:
+        break;
+    }
+    runHub(&p, catalog, catalogCount, monsters, monsterCount);
+}
+
 int main(void)
 {
     Item catalog[MAX_ITEM];
     Monster monsters[MAX_MONSTER];
     Player player;
+    AutoSnapshot snap;
     int catalogCount, monsterCount;
     int running = 1;
 
-    srand((unsigned)time(NULL));
-    ui_init();
+    platform_init();
+    plat_srand((unsigned)time(NULL));
+
     catalogCount = loadCatalog("data/item.txt", catalog);
     monsterCount = loadMonsters("data/monster.txt", monsters);
     if (catalogCount == 0 || monsterCount == 0) {
@@ -111,6 +152,17 @@ int main(void)
     }
     memset(&player, 0, sizeof player);
 
+    if (platform_previous_running() && autosave_load(&snap)) {
+        char answer[MAX_NAME];
+        printf("Pulihkan sesi sebelumnya? (y/n)");
+        fflush(stdout);
+        if (readLine(answer, sizeof answer) && (answer[0] == 'y' || answer[0] == 'Y')) {
+            resumeSession(&snap, catalog, catalogCount, monsters, monsterCount);
+            return 0;
+        }
+    }
+
+    ui_init();
     while (running) {
         int choice = mainMenu();
         switch (choice) {

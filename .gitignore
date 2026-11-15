@@ -11,3 +11,8 @@ tests/out_last.txt
 # Runtime files (dihasilkan saat main)
 data/save.txt
 data/leaderboard.txt
+data/autosave.dat
+data/autosave.bak
+data/session.lock
+data/crash.log
+data/*.tmp.*

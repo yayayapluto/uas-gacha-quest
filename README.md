@@ -69,8 +69,19 @@ Aturan yang berlaku di semua terminal:
   `0-9` langsung memilih item; `Esc`/`Q` kembali.
 - **Dungeon:** `W`/`A`/`S`/`D` atau panah untuk jalan langsung tanpa Enter,
   `H` hint (30 gold), `Q` keluar.
-- **Ctrl+C aman:** handler sinyal memulihkan terminal (kursor tampil, echo
-  hidup, alternate screen keluar) bahkan saat di tengah layar.
+- **Ctrl+C / kill / terminal ditutup aman:** handler sinyal memulihkan terminal
+  (kursor tampil, echo hidup, alternate screen keluar), autosave terakhir
+  ditulis, lalu `data/session.lock` ditandai `CLEAN`. Crash (segmentasi,
+  abort) juga memulihkan terminal dan menambah satu baris di `data/crash.log`.
+- **Autosave:** thread latar menulis `data/autosave.dat` setiap aksi (debounce
+  1500 ms, `GACHA_AUTOSAVE_MS` untuk mengubah, minimal 200). Kejadian penting
+  (akhir battle, hasil gacha, jual/beli, treasure, equip) langsung ditulis.
+  File ditulis atomik (tmp + fsync + rename) dan file lama disimpan sebagai
+  `autosave.bak`; jika utama rusak, versi `.bak` yang dipakai.
+- **Satu sesi sekaligus:** instance kedua ditolak dengan pesan "Game sudah
+  berjalan di terminal lain." Setelah crash, saat dijalankan lagi muncul
+  tawaran "Pulihkan sesi sebelumnya? (y/n)" yang melanjutkan battle atau
+  dungeon dari posisi terakhir.
 - **Resize jendela** saat bermain langsung menggambar ulang layout.
 
 Mode warna dan glyph dideteksi, bukan ditebak:

@@ -59,3 +59,28 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
 18. **make debug di Windows.** Karena runtime sanitizer gcc MSYS2 (libasan/
     libubsan) tidak tersedia, target debug memakai clang64 (clang.exe) yang
     punya libclang_rt.asan/ubsan; di Linux tetap gcc.
+19. **Modul platform.** Kode OS-spesifik dipisah ke `src/platform/` (rng,
+    atomicfile, lock, sig, crash, autosave, platform) dan dipanggil dari
+    `main()` sebelum `ui_init`. Logika game tidak berubah; hanya `rand()`
+    diganti `plat_rand()` karena state RNG harus ikut tersimpan.
+20. **PRNG terserialisasi.** xorshift64* dengan keluaran 31 bit meniru rentang
+    `rand() % N`. `plat_rng_state`/`plat_rng_set` memakai `unsigned long long`
+    karena `long` hanya 4 byte di Windows; state 64 bit tidak muat di `long`.
+21. **Autosave terpisah dari save.txt.** Snapshot biner `data/autosave.dat`
+    (magic `GQAS`, versi, panjang, CRC32, payload struct) ditulis thread
+    latar; `save.txt` tetap format teks manual. Hanya snapshot terbaru yang
+    ditulis (pending di memori), debounce 1500 ms (env `GACHA_AUTOSAVE_MS`,
+    minimal 200), kejadian penting langsung flush. CRC identik dilewati.
+22. **Rotasi .bak.** Sebelum rename, file lama dijadikan `autosave.bak`;
+    muat memvalidasi magic/versi/panjang/CRC dan jatuh ke `.bak` bila utama
+    rusak.
+23. **Kunci sesi.** `data/session.lock` berisi `RUNNING pid=<pid> start=<epoch>`
+    dan `CLEAN` saat keluar rapi; proses kedua ditolak. Windows mengunci satu
+    byte di offset 0x7FFFFFF0, bukan byte 0, supaya pembaca isi file tidak
+    terkena lock violation.
+24. **Shutdown dan crash.** POSIX memakai self-pipe + `poll` di `term_getkey`,
+    handler hanya menyetel flag, sinyal kedua diabaikan, watchdog `_exit(130)`
+    setelah 3 detik. Windows memakai `SetConsoleCtrlHandler` + `_kbhit` polling
+    agar loop UI tetap reaktif. Crash handler (sigaltstack) memulihkan terminal
+    lalu menambah satu baris di `data/crash.log` sebelum meneruskan sinyal;
+    handler tidak pernah menulis state game.

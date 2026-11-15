@@ -7,6 +7,7 @@
 #include "gacha.h"
 #include "ui.h"
 #include "render.h"
+#include "autosave.h"
 
 static void shopDraw(void *ctx, int sel)
 {
@@ -47,6 +48,7 @@ void shopMenu(Player *p)
             p->gold -= amount * POTION_COST;
             p->potion += amount;
             set_message("Beli %d potion. Gold: %d, Potion: %d.", amount, p->gold, p->potion);
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
             break;
         }
         case 2: {
@@ -82,6 +84,7 @@ void shopMenu(Player *p)
                 p->itemCount--;
                 syncEquipped(p, oldWeaponId, oldArmorId);
             }
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
             break;
         }
         }

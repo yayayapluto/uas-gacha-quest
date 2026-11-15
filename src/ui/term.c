@@ -3,18 +3,21 @@
 #include <string.h>
 #include "term.h"
 #include "caps.h"
+#include "sig.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <conio.h>
 #include <io.h>
+#define WinSleep(ms) Sleep((DWORD)(ms))
 #else
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <poll.h>
 #include <signal.h>
+#include <errno.h>
 #endif
 
 static int inited = 0;
@@ -59,13 +62,7 @@ int term_size_query(void) { return caps_interactive() ? querySize() : 0; }
 static volatile sig_atomic_t winchFlag = 0;
 static void onWinch(int sig) { (void)sig; winchFlag = 1; }
 
-/* Handlers restore the terminal before dying; SIGTSTP/SIGCONT swap modes. */
-static void onFatal(int sig)
-{
-    term_shutdown();
-    signal(sig, SIG_DFL);
-    raise(sig);
-}
+/* SIGTSTP/SIGCONT swap modes so the shell gets a usable terminal. */
 static void onStop(int sig)
 {
     (void)sig;
@@ -104,6 +101,15 @@ static void enterRaw(void)
 
 void term_raw(void) { if (caps_interactive() && !rawOn) enterRaw(); }
 
+#ifndef _WIN32
+int term_saved_tio(struct termios *out)
+{
+    if (!haveSaved) return 0;
+    *out = savedTio;
+    return 1;
+}
+#endif
+
 void term_cooked(void)
 {
 #ifdef _WIN32
@@ -140,9 +146,6 @@ void term_init(void)
         haveSaved = 1;
     }
     signal(SIGWINCH, onWinch);
-    signal(SIGINT, onFatal);
-    signal(SIGTERM, onFatal);
-    signal(SIGHUP, onFatal);
     signal(SIGTSTP, onStop);
     signal(SIGCONT, onCont);
 #endif
@@ -171,7 +174,10 @@ TermKey term_getkey(char *ch)
     if (!caps_interactive()) return KEY_EOF;
 #ifdef _WIN32
     {
-        int c = _getch();
+        int c;
+        if (sig_requested()) return KEY_EOF;
+        if (!_kbhit()) { WinSleep(30); return KEY_NONE; }
+        c = _getch();
         if (c == 0xE0 || c == 0) {
             int c2 = _getch();
             querySize();
@@ -193,19 +199,37 @@ TermKey term_getkey(char *ch)
 #else
     {
         unsigned char c;
-        struct pollfd pfd;
+        struct pollfd pfd[2];
+        int nfds = 0;
         int ready;
+        int wfd = sig_wake_fd();
         if (winchFlag) {
             winchFlag = 0;
             querySize();
             return KEY_RESIZE;
         }
-        pfd.fd = STDIN_FILENO;
-        pfd.events = POLLIN;
-        ready = poll(&pfd, 1, 30);
-        if (ready <= 0) {
+        pfd[nfds].fd = STDIN_FILENO;
+        pfd[nfds].events = POLLIN;
+        nfds++;
+        if (wfd >= 0) {
+            pfd[nfds].fd = wfd;
+            pfd[nfds].events = POLLIN;
+            nfds++;
+        }
+        ready = poll(pfd, (nfds_t)nfds, 30);
+        if (ready < 0) {
+            if (sig_requested()) return KEY_EOF;
             querySize();
             return winchFlag ? KEY_RESIZE : KEY_NONE;
+        }
+        if (ready == 0) {
+            querySize();
+            return winchFlag ? KEY_RESIZE : KEY_NONE;
+        }
+        if (nfds > 1 && (pfd[1].revents & POLLIN)) {
+            char drain[16];
+            while (read(wfd, drain, sizeof drain) > 0) {}
+            return KEY_EOF;
         }
         if (read(STDIN_FILENO, &c, 1) != 1) return KEY_EOF;
         if (c == 27) {

@@ -12,6 +12,9 @@
 #include "caps.h"
 #include "term.h"
 #include "render.h"
+#include "rng.h"
+#include "platform.h"
+#include "autosave.h"
 
 #define VIEW_WIDTH 25
 #define VIEW_HEIGHT 15
@@ -366,15 +369,132 @@ unsigned int promptWorldSeed(void)
     }
 }
 
+/* Turn loop shared by a fresh run and a restored session. */
+static void dungeonLoop(Player *p, DungeonState *st, char area[][AREA_MAX],
+                        char trail[][AREA_MAX], Point path[],
+                        int steps, int hintsUsed, const char *initialMsg)
+{
+    int finished = 0;
+    char message[128];
+    char buf[256];
+
+    snprintf(message, sizeof message, "%s", initialMsg);
+    while (!finished) {
+        char cmd;
+        renderDungeon(area, st, trail, message, steps, p);
+        if (platform_shutdown_requested()) break;
+        if (caps_interactive()) {
+            char ch;
+            TermKey k = term_getkey(&ch);
+            if (k == KEY_EOF) break;
+            if (k == KEY_RESIZE || k == KEY_ENTER) continue;
+            if (k == KEY_UP) cmd = 'W';
+            else if (k == KEY_DOWN) cmd = 'S';
+            else if (k == KEY_LEFT) cmd = 'A';
+            else if (k == KEY_RIGHT) cmd = 'D';
+            else if (k == KEY_ESC) cmd = 'Q';
+            else if (k == KEY_CHAR) cmd = (char)toupper((unsigned char)ch);
+            else continue;
+        } else {
+            if (!readLine(buf, sizeof buf)) break;
+            if (buf[0] == '\0' || buf[1] != '\0') {
+                strcpy(message, "Masukkan satu huruf: W/A/S/D, H, atau Q.");
+                continue;
+            }
+            cmd = (char)toupper((unsigned char)buf[0]);
+        }
+        switch (cmd) {
+        case 'W':
+        case 'A':
+        case 'S':
+        case 'D': {
+            int dRow = 0, dCol = 0;
+            if (cmd == 'W') dRow = -1;
+            if (cmd == 'S') dRow = 1;
+            if (cmd == 'A') dCol = -1;
+            if (cmd == 'D') dCol = 1;
+            {
+                int wx = st->posX + dCol, wy = st->posY + dRow;
+                char cell = dungeonCell(st->seed, wx, wy);
+                if (cell == '#') {
+                    strcpy(message, "Tembok! Tidak bisa lewat.");
+                } else {
+                    int treasure = 0;
+                    st->posX = wx;
+                    st->posY = wy;
+                    steps++;
+                    ensureArea(st, area);
+                    memset(trail, ' ', (size_t)AREA_MAX * AREA_MAX);
+                    if (cell == 'T' && !alreadyTaken(st, wx, wy)) {
+                        if (st->takenCount < MAX_TAKEN_TREASURES) {
+                            st->takenTreasures[st->takenCount].row = wy;
+                            st->takenTreasures[st->takenCount].col = wx;
+                            st->takenCount++;
+                        }
+                        area[wy - st->originY][wx - st->originX] = '.';
+                        p->gold += TREASURE_GOLD;
+                        treasure = 1;
+                        sprintf(message, "Treasure! +%d gold. Sudah %d treasure di run ini.",
+                                TREASURE_GOLD, st->takenCount);
+                    } else {
+                        sprintf(message, "Posisi (%d,%d), langkah %d.", wx, wy, steps);
+                    }
+                    autosave_publish(p, AS_SCREEN_DUNGEON, NULL, 0, st, steps, hintsUsed, treasure);
+                }
+            }
+            break;
+        }
+        case 'H':
+            if (hintsUsed >= MAX_HINTS) {
+                sprintf(message, "Hint sudah habis (maks %d kali).", MAX_HINTS);
+            } else if (p->gold < HINT_COST) {
+                sprintf(message, "Gold kurang, hint butuh %d gold.", HINT_COST);
+            } else {
+                Point pos;
+                int length;
+                p->gold -= HINT_COST;
+                hintsUsed++;
+                memset(trail, ' ', (size_t)AREA_MAX * AREA_MAX);
+                pos.row = st->posY - st->originY;
+                pos.col = st->posX - st->originX;
+                length = bfsToTreasure(area, pos, path);
+                if (length < 0) {
+                    strcpy(message, "Di sekitar sini tidak ada treasure.");
+                } else {
+                    int i;
+                    for (i = 0; i < length; i++)
+                        trail[path[i].row][path[i].col] = '*';
+                    sprintf(message, "Treasure terdekat %d langkah dari sini. Sisa hint %d.",
+                            length - 1, MAX_HINTS - hintsUsed);
+                }
+                autosave_publish(p, AS_SCREEN_DUNGEON, NULL, 0, st, steps, hintsUsed, 1);
+            }
+            break;
+        case 'Q':
+            if (!caps_interactive()) {
+                printf("\033[?25h");
+                clear_screen();
+            }
+            set_message("Keluar dungeon. Langkah total: %d.", steps);
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
+            ui_wait_enter("Tekan Enter untuk lanjut...");
+            finished = 1;
+            break;
+        default:
+            strcpy(message, "Gerakan tidak dikenal.");
+            break;
+        }
+    }
+    if (!finished && !caps_interactive()) printf("\033[?25h");
+}
+
 void runDungeon(Player *p)
 {
     char area[AREA_MAX][AREA_MAX];
     char trail[AREA_MAX][AREA_MAX];
     Point path[MAX_PATH_CELLS];
     DungeonState st;
-    int steps = 0, hintsUsed = 0, finished = 0;
     char message[128];
-    char buf[256];
     Point from, far;
     char entry[16];
 
@@ -425,105 +545,18 @@ void runDungeon(Player *p)
     else
         strcpy(message, "Area awal tidak tersambung.");
 
-    while (!finished) {
-        char cmd;
-        renderDungeon(area, &st, trail, message, steps, p);
-        if (caps_interactive()) {
-            char ch;
-            TermKey k = term_getkey(&ch);
-            if (k == KEY_EOF) break;
-            if (k == KEY_RESIZE || k == KEY_ENTER) continue;
-            if (k == KEY_UP) cmd = 'W';
-            else if (k == KEY_DOWN) cmd = 'S';
-            else if (k == KEY_LEFT) cmd = 'A';
-            else if (k == KEY_RIGHT) cmd = 'D';
-            else if (k == KEY_ESC) cmd = 'Q';
-            else if (k == KEY_CHAR) cmd = (char)toupper((unsigned char)ch);
-            else continue;
-        } else {
-            if (!readLine(buf, sizeof buf)) break;
-            if (buf[0] == '\0' || buf[1] != '\0') {
-                strcpy(message, "Masukkan satu huruf: W/A/S/D, H, atau Q.");
-                continue;
-            }
-            cmd = (char)toupper((unsigned char)buf[0]);
-        }
-        switch (cmd) {
-        case 'W':
-        case 'A':
-        case 'S':
-        case 'D': {
-            int dRow = 0, dCol = 0;
-            if (cmd == 'W') dRow = -1;
-            if (cmd == 'S') dRow = 1;
-            if (cmd == 'A') dCol = -1;
-            if (cmd == 'D') dCol = 1;
-            {
-                int wx = st.posX + dCol, wy = st.posY + dRow;
-                char cell = dungeonCell(st.seed, wx, wy);
-                if (cell == '#') {
-                    strcpy(message, "Tembok! Tidak bisa lewat.");
-                } else {
-                    st.posX = wx;
-                    st.posY = wy;
-                    steps++;
-                    ensureArea(&st, area);
-                    memset(trail, ' ', sizeof trail);
-                    if (cell == 'T' && !alreadyTaken(&st, wx, wy)) {
-                        if (st.takenCount < MAX_TAKEN_TREASURES) {
-                            st.takenTreasures[st.takenCount].row = wy;
-                            st.takenTreasures[st.takenCount].col = wx;
-                            st.takenCount++;
-                        }
-                        area[wy - st.originY][wx - st.originX] = '.';
-                        p->gold += TREASURE_GOLD;
-                        sprintf(message, "Treasure! +%d gold. Sudah %d treasure di run ini.",
-                                TREASURE_GOLD, st.takenCount);
-                    } else {
-                        sprintf(message, "Posisi (%d,%d), langkah %d.", wx, wy, steps);
-                    }
-                }
-            }
-            break;
-        }
-        case 'H':
-            if (hintsUsed >= MAX_HINTS) {
-                sprintf(message, "Hint sudah habis (maks %d kali).", MAX_HINTS);
-            } else if (p->gold < HINT_COST) {
-                sprintf(message, "Gold kurang, hint butuh %d gold.", HINT_COST);
-            } else {
-                Point pos;
-                int length;
-                p->gold -= HINT_COST;
-                hintsUsed++;
-                memset(trail, ' ', sizeof trail);
-                pos.row = st.posY - st.originY;
-                pos.col = st.posX - st.originX;
-                length = bfsToTreasure(area, pos, path);
-                if (length < 0) {
-                    strcpy(message, "Di sekitar sini tidak ada treasure.");
-                } else {
-                    int i;
-                    for (i = 0; i < length; i++)
-                        trail[path[i].row][path[i].col] = '*';
-                    sprintf(message, "Treasure terdekat %d langkah dari sini. Sisa hint %d.",
-                            length - 1, MAX_HINTS - hintsUsed);
-                }
-            }
-            break;
-        case 'Q':
-            if (!caps_interactive()) {
-                printf("\033[?25h");
-                clear_screen();
-            }
-            set_message("Keluar dungeon. Langkah total: %d.", steps);
-            ui_wait_enter("Tekan Enter untuk lanjut...");
-            finished = 1;
-            break;
-        default:
-            strcpy(message, "Gerakan tidak dikenal.");
-            break;
-        }
-    }
-    if (!finished && !caps_interactive()) printf("\033[?25h");
+    dungeonLoop(p, &st, area, trail, path, 0, 0, message);
+}
+
+/* Continues a dungeon run restored from the autosave at the same position. */
+void resumeDungeon(Player *p, const DungeonState *saved, int steps, int hints)
+{
+    char area[AREA_MAX][AREA_MAX];
+    char trail[AREA_MAX][AREA_MAX];
+    Point path[MAX_PATH_CELLS];
+    DungeonState st = *saved;
+
+    buildArea(&st, area);
+    memset(trail, ' ', sizeof trail);
+    dungeonLoop(p, &st, area, trail, path, steps, hints, "Sesi dipulihkan dari autosave.");
 }

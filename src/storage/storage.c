@@ -5,6 +5,7 @@
 #include "util.h"
 #include "ui.h"
 #include "render.h"
+#include "atomicfile.h"
 
 /* Reads the item catalog; returns how many items were loaded. */
 int loadCatalog(const char *file, Item items[])
@@ -59,22 +60,28 @@ int loadMonsters(const char *file, Monster monsters[])
 /* Writes the player progress to data/save.txt (PRD section 9, plus the world seed); 1 on success. */
 int saveGame(const Player *p)
 {
-    FILE *fp = fopen("data/save.txt", "w");
+    static char buf[4096];
     int weaponId = -1, armorId = -1, i;
+    int n;
 
-    if (fp == NULL) {
+    if (p->weaponIndex >= 0) weaponId = p->inventory[p->weaponIndex].id;
+    if (p->armorIndex >= 0) armorId = p->inventory[p->armorIndex].id;
+    n = snprintf(buf, sizeof buf,
+                 "%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%u|%d|%d\n%d\n",
+                 p->name, p->hp, p->maxHp, p->level, p->exp, p->gold, p->atk, p->def,
+                 p->potion, p->pity, p->totalPull, p->score, p->seed, weaponId, armorId,
+                 p->itemCount);
+    for (i = 0; i < p->itemCount; i++) {
+        if (n < 0 || (size_t)n >= sizeof buf - 16) {
+            set_message("Gagal membuka data/save.txt untuk menulis.");
+            return 0;
+        }
+        n += snprintf(buf + n, sizeof buf - (size_t)n, "%d\n", p->inventory[i].id);
+    }
+    if (n < 0 || !file_write_atomic("data/save.txt", buf, (size_t)n)) {
         set_message("Gagal membuka data/save.txt untuk menulis.");
         return 0;
     }
-    if (p->weaponIndex >= 0) weaponId = p->inventory[p->weaponIndex].id;
-    if (p->armorIndex >= 0) armorId = p->inventory[p->armorIndex].id;
-    fprintf(fp, "%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%u|%d|%d\n",
-            p->name, p->hp, p->maxHp, p->level, p->exp, p->gold, p->atk, p->def,
-            p->potion, p->pity, p->totalPull, p->score, p->seed, weaponId, armorId);
-    fprintf(fp, "%d\n", p->itemCount);
-    for (i = 0; i < p->itemCount; i++)
-        fprintf(fp, "%d\n", p->inventory[i].id);
-    fclose(fp);
     set_message("Progres tersimpan di data/save.txt.");
     return 1;
 }
@@ -191,14 +198,20 @@ void recordScore(const Player *p)
             }
         }
     }
-    fp = fopen("data/leaderboard.txt", "w");
-    if (fp == NULL) {
-        set_message("Gagal membuka data/leaderboard.txt untuk menulis.");
-        return;
+    {
+        static char buf[MAX_LEADERBOARD * (MAX_NAME + 24)];
+        int n = 0, k;
+        for (i = 0; i < count && i < MAX_LEADERBOARD; i++) {
+            k = snprintf(buf + n, sizeof buf - (size_t)n, "%s|%d|%d\n",
+                         names[i], levels[i], scores[i]);
+            if (k < 0) break;
+            n += k;
+        }
+        if (!file_write_atomic("data/leaderboard.txt", buf, (size_t)n)) {
+            set_message("Gagal membuka data/leaderboard.txt untuk menulis.");
+            return;
+        }
     }
-    for (i = 0; i < count && i < MAX_LEADERBOARD; i++)
-        fprintf(fp, "%s|%d|%d\n", names[i], levels[i], scores[i]);
-    fclose(fp);
     set_message("Skor %s (%d) dicatat ke leaderboard.", p->name, p->score);
 }
 
