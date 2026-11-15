@@ -27,7 +27,7 @@ tanpa `system("cls")` dan tanpa teks lama menumpuk.
 
 ## Cara Kompilasi
 
-Butuh `gcc` (C99) dan `make` (GNU make).
+Butuh `gcc` (C11) dan `make` (GNU make). Build memakai `-Wall -Wextra -Wpedantic`.
 
 - Linux / WSL:
   ```
@@ -43,6 +43,62 @@ Butuh `gcc` (C99) dan `make` (GNU make).
 
 Buka shell pada folder proyek (root tempat Makefile berada) sebelum
 menjalankan make (file data dibaca dengan path relatif).
+
+## Cara Bermain dari Terminal Apa Saja
+
+Kompilasi sekali (`make`), lalu jalankan biner yang sama dari shell mana pun.
+Game mendeteksi kemampuan terminal secara otomatis; tidak ada flag yang wajib
+disetel.
+
+| Terminal | Perintah menjalankan | Hasil tampilan |
+| --- | --- | --- |
+| Windows Terminal, PowerShell, CMD | `bin\game.exe` | truecolor + Unicode (VT diaktifkan otomatis) |
+| Git Bash / MSYS2 mintty | `./bin/game.exe` | truecolor/256 + Unicode |
+| WSL (Ubuntu dkk.) | `./bin/game` | ikuti `TERM`/`COLORTERM` milik WSL |
+| Linux: GNOME Terminal, Konsole, xterm, Alacritty, kitty | `./bin/game` | truecolor/256 + Unicode |
+| macOS: Terminal.app, iTerm2 | `./bin/game` | 256/truecolor + Unicode |
+| SSH, tmux, screen | `./bin/game` | truecolor bila `COLORTERM` diteruskan; sisanya 256/16 |
+| Terminal lawas (`TERM=dumb`, cons68xx, output di-redirect) | sama | mono ASCII otomatis |
+
+Aturan yang berlaku di semua terminal:
+
+- **Ukuran minimum 80x24.** Lebih kecil → pesan "Perbesar terminal (min 80x24)",
+  layout tidak digambar rusak. Di terminal lebih lebar, konten 78 kolom
+  dipusatkan.
+- **Kontrol menu:** panah atas/bawah (atau `W`/`S`, `K`/`J`) + Enter; angka
+  `0-9` langsung memilih item; `Esc`/`Q` kembali.
+- **Dungeon:** `W`/`A`/`S`/`D` atau panah untuk jalan langsung tanpa Enter,
+  `H` hint (30 gold), `Q` keluar.
+- **Ctrl+C aman:** handler sinyal memulihkan terminal (kursor tampil, echo
+  hidup, alternate screen keluar) bahkan saat di tengah layar.
+- **Resize jendela** saat bermain langsung menggambar ulang layout.
+
+Mode warna dan glyph dideteksi, bukan ditebak:
+
+| Kondisi | Mode |
+| --- | --- |
+| `NO_COLOR` terisi, `TERM=dumb`, atau output bukan TTY | mono, ASCII |
+| `COLORTERM` berisi `truecolor`/`24bit` | truecolor |
+| `TERM` berisi `256color` | 256 warna |
+| selain itu | 16 warna |
+| locale UTF-8 (`LANG`/`LC_ALL`/`LC_CTYPE`) | glyph Unicode `┌ ─ │ █ ░` |
+| locale non-UTF-8 (mis. `LANG=C`) | ASCII `+ - \| #` |
+
+Override manual lewat environment, berguna kalau deteksi keliru:
+
+| Shell | Contoh |
+| --- | --- |
+| bash/zsh/fish (Git Bash, WSL, Linux, macOS) | `GACHA_COLOR=truecolor ./bin/game` |
+| PowerShell | `$env:GACHA_COLOR="truecolor"; bin\game.exe` |
+| CMD | `set GACHA_COLOR=truecolor && bin\game.exe` |
+
+Nilai yang valid: `GACHA_COLOR=mono|16|256|truecolor`, `GACHA_ASCII=1`
+(paksa ASCII), `GACHA_UNICODE=1` (paksa Unicode).
+
+**Mode non-interaktif:** bila stdin/stdout di-pipe atau di-redirect (mis.
+`bin/game < tests/in_demoA.txt`), game otomatis memakai mode fallback: tanpa
+warna, tanpa clear screen, input baris seperti versi lama — dipakai oleh seluruh
+test dan demo alur di bagian bawah README.
 
 ## Cara Bermain
 
