@@ -466,8 +466,20 @@ static void handleContent(Player *p, const Monster monsters[], int monsterCount,
 
 /* Draws a window of the cached area with the player always in the middle. */
 /* Visible radius: cells further than this from the player stay hidden, so
-   chunks are still cached around him but only the nearby part is drawn. */
-#define FOG_RADIUS 6
+   chunks are still cached around him but only the nearby part is drawn.
+   Character cells are about twice as tall as they are wide, so the distance
+   test weights the vertical offset to keep the lit area round on screen
+   instead of an ellipse. */
+#define FOG_RADIUS 6.0f
+#define FOG_VERTICAL 2.0f   /* vertical cells per horizontal cell, roughly */
+
+static int fogged(int dr, int dc)
+{
+    float du = (float)dc;
+    float dv = (float)dr * FOG_VERTICAL;
+    float d2 = du * du + dv * dv;
+    return d2 > FOG_RADIUS * FOG_RADIUS * FOG_VERTICAL;
+}
 
 /* View size follows the terminal: width is the terminal width minus the map
    margins, height is what is left above the status and message rows. */
@@ -543,7 +555,7 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
                 if (ty == vh / 2 && tx == vw / 2) printf("P");
                 else drawCell(st->seed, area, trail, ay + dr, ax + dc,
                               st->posX + dc, st->posY + dr,
-                              dr * dr + dc * dc > FOG_RADIUS * FOG_RADIUS, 0, 0, 0);
+                              fogged(dr, dc), 0, 0, 0);
             }
             printf("\n");
         }
@@ -564,7 +576,7 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
             else
                 drawCell(st->seed, area, trail, ay + dr, ax + dc,
                          st->posX + dc, st->posY + dr,
-                         dr * dr + dc * dc > FOG_RADIUS * FOG_RADIUS, 1, srow, scol);
+                         fogged(dr, dc), 1, srow, scol);
         }
     }
     ui_panel(17, 0, wid, 5, "Status");
