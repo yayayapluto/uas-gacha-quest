@@ -490,11 +490,21 @@ Indeks tidak ada di inventory.
 | HP [##########] 100/100                        |
 | Gold   : 200   Potion: 2                       |
 +------------------------------------------------+
- 1. Beli potion (40 gold)
- 2. Jual item
- 0. Kembali
++Menu--------------------------------------------+
+|  1. Beli potion (40 gold)                      |
+|> 2. Jual item                                  |
+|  0. Kembali                                    |
++------------------------------------------------+
++Info--------------------------------------------+
+| Beli 2 potion. Gold: 120, Potion: 4.           |
+|                                                |
++------------------------------------------------+
 Pilih:
 ```
+
+Menu Shop dan pesan hasil aksi masing-masing berada di panel sendiri. Panel
+`Info` selalu tampil walau pesan kosong, jadi posisi menu tidak bergeser antar
+aksi.
 
 Beli potion:
 
