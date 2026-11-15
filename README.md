@@ -4,6 +4,16 @@ Mini RPG + Gacha berbasis CLI (Bahasa C) sesuai `docs/Projek UAS Daspro Gacha Qu
 
 Catatan lengkap semua layar (tampilan, warna, pesan): `UI.md`.
 
+## Quick Way
+
+```sh
+git clone https://github.com/yayayapluto/Projek-UAS-Gacha-Quest.git
+cd Projek-UAS-Gacha-Quest
+make start
+```
+
+`make start` membangun biner (bila belum ada) lalu langsung menjalankannya.
+
 ## Tampilan CLI (Redraw per Layar)
 
 Setiap layar (menu utama, Hub, Battle, Gacha, Inventory, Shop, Dungeon, Status,
@@ -160,7 +170,9 @@ menyimpan peta.
   hash, jadi jumlah isi sebanding jumlah chunk, bukan jumlah lantai. Chest
   membuka roll loot sendiri (55% equipment dengan bobot rarity seperti gacha,
   25% potion, sisanya gold) dan menampilkan animasi slot horizontal.
-- **Fog dan biome.** Hanya sel dalam radius 6 dari pemain yang digambar.
+- **Fog dan biome.** Hanya sel dalam radius fog dari pemain yang digambar, dan
+  fog bergerak mengikuti pemain. Radius = 45% dari setengah sumbu terkecil
+  (minimum 4), jadi terminal lebar memperlihatkan lebih banyak dunia.
   Tembok memakai palet biome dari `cellHash(seed, x/32, y/32)`: 8 palet
   (stone, cavern, moss, crystal, ember, frozen, desert, void) dengan warna
   latar berbeda supaya perpindahan area terasa.
