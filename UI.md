@@ -652,7 +652,9 @@ Isi chunk (roll per 16x16, dari seed):
 Equipment dari chest memakai bobot rarity yang sama dengan gacha
 (Common 60 / Rare 25 / Epic 12 / Legendary 3 setelah pity tidak berlaku),
 lalu memilih item katalog dengan rarity tersebut. Chest menampilkan animasi
-slot horizontal di panel `Gacha` sebelum hasilnya tampil.
+slot horizontal di panel `Gacha`: tiap sel strip memakai warna rarity-nya
+sendiri selama bergeser, lalu strip berhenti di hasil. Monster yang diinjak
+langsung membuka layar Battle tanpa kembali ke frame dungeon lebih dulu.
 Gerak (W/A/S/D, H hint 30 gold, Q keluar):
 ```
 

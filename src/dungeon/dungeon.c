@@ -393,7 +393,9 @@ static void chestAnimation(const Loot *loot)
                                                                    : slotRarityAt(index, 0))
                               : slotRarityAt(index, 0);
             if (x < 0 || x + 7 > SLOT_VIEW) continue;
-            render_text(9, 2 + x, done ? style_rarity(rarity) : ST_DIM, "%-7s", names[rarity - 1]);
+            /* every cell keeps its own rarity colour while the strip scrolls,
+               so the animation shows the spread of outcomes, not a grey blur */
+            render_text(9, 2 + x, style_rarity(rarity), "%-7s", names[rarity - 1]);
         }
         render_text(11, 6, ST_ACCENT, "%s", done ? "^" : "");
         ui_footer(NULL);
@@ -427,7 +429,7 @@ static void handleContent(Player *p, const Monster monsters[], int monsterCount,
             const Monster *m = &monsters[cellHash(p->seed ^ 0x1b873593u, wx, wy)
                                          % (unsigned int)monsterCount];
             sprintf(message, "Monster %s muncul!", m->name);
-            startBattle(p, m, 1);
+            startBattleAgainst(p, m);
         }
         return;
     }
@@ -464,8 +466,20 @@ static void handleContent(Player *p, const Monster monsters[], int monsterCount,
 
 /* Draws a window of the cached area with the player always in the middle. */
 /* Visible radius: cells further than this from the player stay hidden, so
-   chunks are still cached around him but only the nearby part is drawn. */
-#define FOG_RADIUS 6
+   chunks are still cached around him but only the nearby part is drawn.
+   Character cells are about twice as tall as they are wide, so the distance
+   test weights the vertical offset to keep the lit area round on screen
+   instead of an ellipse. */
+#define FOG_RADIUS 6.0f
+#define FOG_VERTICAL 2.0f   /* vertical cells per horizontal cell, roughly */
+
+static int fogged(int dr, int dc)
+{
+    float du = (float)dc;
+    float dv = (float)dr * FOG_VERTICAL;
+    float d2 = du * du + dv * dv;
+    return d2 > FOG_RADIUS * FOG_RADIUS * FOG_VERTICAL;
+}
 
 /* View size follows the terminal: width is the terminal width minus the map
    margins, height is what is left above the status and message rows. */
@@ -541,7 +555,7 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
                 if (ty == vh / 2 && tx == vw / 2) printf("P");
                 else drawCell(st->seed, area, trail, ay + dr, ax + dc,
                               st->posX + dc, st->posY + dr,
-                              dr * dr + dc * dc > FOG_RADIUS * FOG_RADIUS, 0, 0, 0);
+                              fogged(dr, dc), 0, 0, 0);
             }
             printf("\n");
         }
@@ -562,7 +576,7 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
             else
                 drawCell(st->seed, area, trail, ay + dr, ax + dc,
                          st->posX + dc, st->posY + dr,
-                         dr * dr + dc * dc > FOG_RADIUS * FOG_RADIUS, 1, srow, scol);
+                         fogged(dr, dc), 1, srow, scol);
         }
     }
     ui_panel(17, 0, wid, 5, "Status");
@@ -657,13 +671,15 @@ static void dungeonLoop(Player *p, DungeonState *st, char area[][AREA_MAX],
                         const Monster monsters[], int monsterCount)
 {
     int finished = 0;
+    int drewBattle = 0;
     char message[128];
     char buf[256];
 
     snprintf(message, sizeof message, "%s", initialMsg);
     while (!finished) {
         char cmd;
-        renderDungeon(area, st, trail, message, steps, p);
+        if (drewBattle) drewBattle = 0;   /* keep the battle frame on screen */
+        else renderDungeon(area, st, trail, message, steps, p);
         if (platform_shutdown_requested()) break;
         if (caps_interactive()) {
             char ch;
@@ -713,6 +729,9 @@ static void dungeonLoop(Player *p, DungeonState *st, char area[][AREA_MAX],
                         treasure = (cell == 'T' || cell == 'G' || cell == 'C');
                         handleContent(p, monsters, monsterCount, catalog, catalogCount,
                                       cell, wx, wy, area, message);
+                        /* the battle already drew its own screen, so the loop
+                           must not paint over it until the player presses a key */
+                        if (cell == 'M') drewBattle = 1;
                     } else {
                         sprintf(message, "Posisi (%d,%d), langkah %d.", wx, wy, steps);
                     }

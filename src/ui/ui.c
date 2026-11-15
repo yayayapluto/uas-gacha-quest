@@ -259,7 +259,12 @@ void ui_status_panel_at(const Player *p, int row, int col, int w)
     render_text(row + 1, col + 2, ST_TEXT, "Pemain : %s", p->name);
     render_text(row + 2, col + 2, ST_TEXT, "Level  : %d (Skor %d)", p->level, p->score);
     render_text(row + 3, col + 2, ST_TEXT, "HP ");
-    ui_hp_bar(row + 3, col + 5, w - 6, p->hp, p->maxHp);
+    /* the ratio sits in the right gutter of the HP row, so the bar keeps its
+       full width and the number is readable without counting blocks */
+    snprintf(num, sizeof num, "%d/%d", p->hp, p->maxHp);
+    ui_hp_bar(row + 3, col + 5, w - 6 - 2 - ui_visible_len(num), p->hp, p->maxHp);
+    render_text(row + 3, col + w - 2 - ui_visible_len(num), style_hp(p->hp, p->maxHp),
+                "%s", num);
     render_text(row + 4, col + 2, ST_TEXT, "Gold   : ");
     snprintf(num, sizeof num, "%d", p->gold);
     render_text(row + 4, col + 2 + 9, ST_GOLD, "%s", num);

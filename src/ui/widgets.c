@@ -88,12 +88,17 @@ void widget_menu_h(int row, int col, const char *const *items, const int *nums,
     }
 }
 
+/* The footer is a property of the frame, not of the caller: menu pickers and
+   screens both ask for it, so it is drawn once at a fixed grid row. Drawing it
+   relative to render_max_row() made the second call stack a duplicate line. */
+#define FOOTER_ROW (UI_ROWS - 1)
+
 void widget_footer(const char *extra)
 {
     char buf[192];
     snprintf(buf, sizeof buf, "%s pilih  Enter konfirmasi  Esc kembali%s%s",
              caps_glyphs()->arrowUD, extra != NULL ? "  " : "", extra != NULL ? extra : "");
-    render_text(render_max_row() + 2, 0, ST_DIM, "%s", buf);
+    render_text(FOOTER_ROW, 0, ST_DIM, "%s", buf);
 }
 
 void widget_msg(int row, int col, int w, const char *msg)
