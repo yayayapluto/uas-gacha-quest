@@ -422,16 +422,25 @@ Gold kurang! Pull 10x butuh 900 gold.
 | HP [##########] 100/100                        |
 | Gold   : 0   Potion: 2                         |
 +------------------------------------------------+
-Inventory (2/36)
-Idx  Nama                 Tipe Rarity     Power Terpasang
-0    Storm Hammer         S    Rare       22
-1    Scale Cuirass        A    Common     8
++Inventory (2/36)--------------------------------+
+| Idx  Nama              Tipe Rarity    Power   |
+| 1*   Storm Hammer      S    Rare      22      |
+| 0#   Scale Cuirass     A    Common    8       |
+|                                               |
+|                                               |
+|                                               |
++-----------------------------------------------+
  1. Urutkan
  2. Cari item
  3. Equip item
  0. Kembali
 Pilih:
 ```
+
+Tabel inventory berada di dalam panel. Penanda terpasang menempel pada kolom
+`Idx`: `*` untuk senjata dan `#` untuk armor, supaya kolom tetap muat 46
+karakter di dalam panel 50 kolom. Nama lebih dari 17 karakter dipotong (bukan
+mendorong kolom lain).
 
 Urutkan:
 
