@@ -193,8 +193,8 @@ void render_flush(void)
     int maxRow = render_max_row();
 
     if (interactive) {
-        if (caps_cols() < UI_COLS || caps_rows() < UI_ROWS) {
-            printf("\033[H\033[2J\033[0mPerbesar terminal (min %dx%d)", UI_COLS, UI_ROWS);
+        if (caps_cols() < MIN_COLS || caps_rows() < MIN_ROWS) {
+            printf("\033[H\033[2J\033[0mPerbesar terminal (min %dx%d)", MIN_COLS, MIN_ROWS);
             fflush(stdout);
             return;
         }
@@ -219,7 +219,12 @@ void render_flush(void)
             if (interactive) {
                 if (!started || cur != cell->st) {
                     n += (size_t)sprintf(outBuf + n, "\033[0m");
-                    if (cell->st == ST_SELECTED) {
+                    if (cell->st >= ST_BIOME_BASE && cell->st < ST_BIOME_BASE + BIOME_COUNT) {
+                        /* biome cells carry their own background, so a wall
+                           reads as a solid block instead of a lone glyph */
+                        n += (size_t)sprintf(outBuf + n, "%s", style_bg(cell->st));
+                        n += (size_t)sprintf(outBuf + n, "%s", style_fg(cell->st));
+                    } else if (cell->st == ST_SELECTED) {
                         n += (size_t)sprintf(outBuf + n, "%s", style_bg(ST_SELECTED));
                         n += (size_t)sprintf(outBuf + n, "%s", style_fg(ST_ACCENT));
                     } else {

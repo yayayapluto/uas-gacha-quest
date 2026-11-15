@@ -9,7 +9,7 @@
 #define CACHED_CHUNKS 5
 #define AREA_MAX (CHUNK_SIZE * CACHED_CHUNKS)
 #define MAX_PATH_CELLS (AREA_MAX * AREA_MAX)
-#define MAX_TAKEN_TREASURES 64
+#define MAX_TAKEN_CELLS 128
 
 #define MAX_LEVEL 10
 #define MAX_POTION 20
@@ -25,6 +25,19 @@
 #define PITY_THRESHOLD 10
 
 #define TREASURE_GOLD 30
+#define DUNGEON_GOLD_MIN 10
+#define DUNGEON_GOLD_MAX 40
+#define CHEST_GOLD_MIN 40
+#define CHEST_GOLD_MAX 120
+#define CHEST_POTION_COUNT 2
+
+/* Chunk content rolls, in percent out of 100 per 16x16 chunk. The first roll
+   hits the chunk, the second finds the cell inside it. */
+#define CHUNK_MONSTER_PCT 45
+#define CHUNK_CHEST_PCT 35
+#define CHUNK_GOLD_PCT 55
+#define CHEST_EQUIPMENT_PCT 55
+#define CHEST_POTION_PCT 25
 
 #define RARITY_COMMON 1
 #define RARITY_RARE 2
@@ -68,7 +81,7 @@ typedef struct { int row, col; } Point;
 typedef struct {
     unsigned int seed;
     int posX, posY;             /* player position in world coordinates */
-    Point takenTreasures[MAX_TAKEN_TREASURES];
+    Point taken[MAX_TAKEN_CELLS];   /* content cells already used up */
     int takenCount;
     int originX, originY;       /* top-left corner of the cached area (world coordinates) */
 } DungeonState;

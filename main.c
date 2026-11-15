@@ -140,7 +140,7 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
         case 2: gachaMenu(p, catalog, catalogCount); break;
         case 3: inventoryMenu(p); break;
         case 4: shopMenu(p); break;
-        case 5: runDungeon(p); break;
+        case 5: runDungeon(p, catalog, catalogCount, monsters, monsterCount); break;
         case 6: showStatus(p); break;
         case 7: {
             int slot = pickSaveSlot(1);
@@ -184,7 +184,8 @@ static void resumeSession(const AutoSnapshot *snap, const Item catalog[], int ca
         break;
     case AS_SCREEN_DUNGEON:
         if (snap->dungeonActive) {
-            resumeDungeon(&p, &snap->dungeon, snap->dungeonSteps, snap->dungeonHints);
+            resumeDungeon(&p, &snap->dungeon, snap->dungeonSteps, snap->dungeonHints,
+                          catalog, catalogCount, monsters, monsterCount);
             runHub(&p, catalog, catalogCount, monsters, monsterCount);
             return;
         }

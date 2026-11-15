@@ -155,6 +155,15 @@ menyimpan peta.
   `x = 1 (mod 6)`. Sel lantai lain kosong, dan sekitar satu dari 89 sel lantai
   berisi treasure. Semua keputusan itu berasal dari `cellHash(seed, x, y)`,
   sebuah hash integer murni tanpa `rand()`.
+- **Isi per chunk.** Tiap chunk 16x16 melempar tiga dadu terpisah dari seed:
+  monster 45%, chest 35%, gold 55%. Yang kena dipasang satu sel lantai hasil
+  hash, jadi jumlah isi sebanding jumlah chunk, bukan jumlah lantai. Chest
+  membuka roll loot sendiri (55% equipment dengan bobot rarity seperti gacha,
+  25% potion, sisanya gold) dan menampilkan animasi slot horizontal.
+- **Fog dan biome.** Hanya sel dalam radius 6 dari pemain yang digambar.
+  Tembok memakai palet biome dari `cellHash(seed, x/32, y/32)`: 8 palet
+  (stone, cavern, moss, crystal, ember, frozen, desert, void) dengan warna
+  latar berbeda supaya perpindahan area terasa.
 - **Seed sama, peta sama.** Seed yang diminta saat game baru ikut tersimpan di
   save slot, jadi **Load Game** mengembalikan dunia yang sama persis.
   Seed juga tampil di menu Status dan di baris info dungeon.

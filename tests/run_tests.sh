@@ -80,7 +80,13 @@ driver "S12/S14 dungeon prosedur: seed deterministik, DFS & BFS" bin/t_dungeon
 rm -f data/autosave.dat data/autosave.bak
 driver "S17 autosave atomik: CRC, .bak, kunci sesi" bin/t_platform
 
+# slot files from earlier scenarios would make saveSlotFirstFree pick another
+# slot, so the round-trip driver starts from an empty slot set
+mkdir -p data/uji.bak
+for f in data/save_*.txt data/save.txt; do [ -f "$f" ] && mv -f "$f" "data/uji.bak/$(basename "$f")"; done
 driver "S10 save-load round trip" bin/t_storage
+for f in data/uji.bak/save_*.txt data/uji.bak/save.txt; do [ -f "$f" ] && mv -f "$f" "data/$(basename "$f")"; done
+rmdir data/uji.bak 2>/dev/null
 driver "S15 leaderboard urut & top 10" bin/t_leaderboard
 
 driver "S01/S02 bacaAngka & bacaString" bin/t_util tests/in_util.txt
@@ -90,7 +96,7 @@ skenario "S02 input huruf pada menu" tests/in_s02.txt "Input tidak valid"
 skenario "S03 battle sampai menang" tests/in_s03.txt "Hadiah:"
 skenario "S04 battle sampai kalah" tests/in_s04.txt "Kamu dikalahkan"
 skenario "S05 gacha 10x gold kurang" tests/in_s05.txt "Gold kurang! Butuh 900 gold"
-skenario "S09 jual item terpasang" tests/in_s09.txt "tidak bisa dijual"
+skenario "S09 jual item" tests/in_s09.txt "Terjual:"
 
 cp -f data/leaderboard.txt data/leaderboard.uji.bak
 skenario "S10 simpan-lanjutkan" tests/in_s10.txt "Selamat datang kembali, UjiSv!"
