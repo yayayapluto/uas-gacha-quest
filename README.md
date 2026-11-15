@@ -27,15 +27,22 @@ tanpa `system("cls")` dan tanpa teks lama menumpuk.
 
 ## Cara Kompilasi
 
-Butuh `gcc` (C99) dan `make` (GNU make).
+Butuh `gcc` (C11) dan `make` (GNU make). Build memakai `-Wall -Wextra -Wpedantic`.
 
 - Linux / WSL:
   ```
   make            # kompilasi ke bin/game, tanpa warning (-Wall -Wextra)
+  make start      # kompilasi lalu langsung main bin/game
   make test       # jalankan seluruh pengujian otomatis
   make debug      # kompilasi + uji dengan AddressSanitizer/UBSan
+  make preview    # jalankan perkakas pratinjau widget UI (tools/ui_preview.c)
   make clean
   ```
+
+`make start` hanya menjalankan biner; tipe terminal tetap dideteksi game
+sendiri, jadi tidak perlu variabel apa pun. Di Windows pakai cmd, PowerShell,
+atau Windows Terminal (bukan mintty MSYS2) karena `_getch()` butuh konsol
+asli.
 - Windows (MSYS2 / MinGW): tambahkan `C:\msys64\usr\bin` ke PATH agar `sh`,
   `rm`, `grep`, `cp` tersedia untuk Makefile, lalu jalankan perintah yang sama.
   Target `make debug` otomatis memakai clang64 (`C:\msys64\clang64\bin\clang.exe`)
@@ -43,6 +50,75 @@ Butuh `gcc` (C99) dan `make` (GNU make).
 
 Buka shell pada folder proyek (root tempat Makefile berada) sebelum
 menjalankan make (file data dibaca dengan path relatif).
+
+## Cara Bermain dari Terminal Apa Saja
+
+Kompilasi sekali (`make`), lalu jalankan biner yang sama dari shell mana pun.
+Game mendeteksi kemampuan terminal secara otomatis; tidak ada flag yang wajib
+disetel.
+
+| Terminal | Perintah menjalankan | Hasil tampilan |
+| --- | --- | --- |
+| Windows Terminal, PowerShell, CMD | `bin\game.exe` | truecolor + Unicode (VT diaktifkan otomatis) |
+| Git Bash / MSYS2 mintty | `./bin/game.exe` | truecolor/256 + Unicode |
+| WSL (Ubuntu dkk.) | `./bin/game` | ikuti `TERM`/`COLORTERM` milik WSL |
+| Linux: GNOME Terminal, Konsole, xterm, Alacritty, kitty | `./bin/game` | truecolor/256 + Unicode |
+| macOS: Terminal.app, iTerm2 | `./bin/game` | 256/truecolor + Unicode |
+| SSH, tmux, screen | `./bin/game` | truecolor bila `COLORTERM` diteruskan; sisanya 256/16 |
+| Terminal lawas (`TERM=dumb`, cons68xx, output di-redirect) | sama | mono ASCII otomatis |
+
+Aturan yang berlaku di semua terminal:
+
+- **Ukuran minimum 50x20.** Lebih kecil → pesan "Perbesar terminal (min 50x20)",
+  layout tidak digambar rusak. Layout rata kiri dan padat: panel tetap 50 kolom,
+  sisa terminal dibiarkan kosong di kanan, footer langsung di bawah konten.
+- **Kontrol menu:** panah atas/bawah (atau `W`/`S`, `K`/`J`) + Enter; angka
+  `0-9` langsung memilih item; `Esc`/`Q` kembali.
+- **Dungeon:** `W`/`A`/`S`/`D` atau panah untuk jalan langsung tanpa Enter,
+  `H` hint (30 gold), `Q` keluar.
+- **Build + main:** `make start` (compile semua lalu jalankan `bin/game`);
+  `make` saja hanya membangun.
+- **Ctrl+C / kill / terminal ditutup aman:** handler sinyal memulihkan terminal
+  (kursor tampil, echo hidup, alternate screen keluar), autosave terakhir
+  ditulis, lalu `data/session.lock` ditandai `CLEAN`. Crash (segmentasi,
+  abort) juga memulihkan terminal dan menambah satu baris di `data/crash.log`.
+- **Autosave:** thread latar menulis `data/autosave.dat` setiap aksi (debounce
+  1500 ms, `GACHA_AUTOSAVE_MS` untuk mengubah, minimal 200). Kejadian penting
+  (akhir battle, hasil gacha, jual/beli, treasure, equip) langsung ditulis.
+  File ditulis atomik (tmp + fsync + rename) dan file lama disimpan sebagai
+  `autosave.bak`; jika utama rusak, versi `.bak` yang dipakai.
+- **Satu sesi sekaligus:** instance kedua ditolak dengan pesan "Game sudah
+  berjalan di terminal lain." Setelah crash, saat dijalankan lagi muncul
+  tawaran "Pulihkan sesi sebelumnya? (y/n)" yang melanjutkan battle atau
+  dungeon dari posisi terakhir.
+- **Resize jendela** saat bermain langsung menggambar ulang layout.
+
+Mode warna dan glyph dideteksi, bukan ditebak:
+
+| Kondisi | Mode |
+| --- | --- |
+| `NO_COLOR` terisi, `TERM=dumb`, atau output bukan TTY | mono, ASCII |
+| `COLORTERM` berisi `truecolor`/`24bit` | truecolor |
+| `TERM` berisi `256color` | 256 warna |
+| selain itu | 16 warna |
+| locale UTF-8 (`LANG`/`LC_ALL`/`LC_CTYPE`) | glyph Unicode `┌ ─ │ █ ░` |
+| locale non-UTF-8 (mis. `LANG=C`) | ASCII `+ - \| #` |
+
+Override manual lewat environment, berguna kalau deteksi keliru:
+
+| Shell | Contoh |
+| --- | --- |
+| bash/zsh/fish (Git Bash, WSL, Linux, macOS) | `GACHA_COLOR=truecolor ./bin/game` |
+| PowerShell | `$env:GACHA_COLOR="truecolor"; bin\game.exe` |
+| CMD | `set GACHA_COLOR=truecolor && bin\game.exe` |
+
+Nilai yang valid: `GACHA_COLOR=mono|16|256|truecolor`, `GACHA_ASCII=1`
+(paksa ASCII), `GACHA_UNICODE=1` (paksa Unicode).
+
+**Mode non-interaktif:** bila stdin/stdout di-pipe atau di-redirect (mis.
+`bin/game < tests/in_demoA.txt`), game otomatis memakai mode fallback: tanpa
+warna, tanpa clear screen, input baris seperti versi lama — dipakai oleh seluruh
+test dan demo alur di bagian bawah README.
 
 ## Cara Bermain
 
@@ -98,22 +174,47 @@ menyimpan peta.
 
 | File | Isi |
 | --- | --- |
-| main.c | Menu utama dan loop hub game |
-| config.h | Konstanta dan struct Item, Monster, Player, Point, DungeonState |
-| util.c/.h | readInt, readString, readLine, clearScreen, printLine, shutdownGame |
-| ui.c/.h | Lapisan tampilan: clear_screen, draw_header, HP bar, warna ANSI, pesan terakhir, ui_wait_enter |
-| player.c/.h | initPlayer, addExp, totalAtk/totalDef, showStatus |
-| battle.c/.h | startBattle, calculateDamage |
-| gacha.c/.h | gachaMenu, rollRarity, findItemInInventory, pullOnce |
-| inventory.c/.h | inventoryMenu, sortInventory, searchItemByName, equipItem |
-| shop.c/.h | shopMenu (beli potion, jual item) |
-| storage.c/.h | loadCatalog, loadMonsters, saveGame, loadGame, recordScore, showLeaderboard |
-| dungeon.c/.h | cellHash, dungeonCell, promptWorldSeed, dfsReachable, bfsShortestPath, runDungeon |
-| data/ | item.txt, monster.txt, save.txt, leaderboard.txt |
+| main.c | Menu utama, loop hub, dan alur pemulihan sesi |
+| src/core/config.h | Konstanta dan struct Item, Monster, Player, Point, DungeonState |
+| src/util/util.c/.h | readInt, readString, readLine, clearScreen, printLine, shutdownGame |
+| src/ui/ui.c/.h | API tampilan: frame layar, panel, menu, input frame, pesan terakhir |
+| src/ui/term.c/.h | Lapisan terminal: raw mode, ukuran, baca tombol, alternate screen, restore |
+| src/ui/caps.c/.h | Deteksi kemampuan terminal (warna, Unicode, ukuran, TTY) |
+| src/ui/style.c/.h | Token warna semantik → escape ANSI sesuai mode warna |
+| src/ui/render.c/.h | Frame buffer grid; satu write per frame |
+| src/ui/widgets.c/.h | Panel, tabel/menu ter-highlight, bar HP/EXP, footer, kotak log |
+| src/player/player.c/.h | initPlayer, addExp, totalAtk/totalDef, showStatus |
+| src/battle/battle.c/.h | startBattle, resumeBattle, battleLoop, calculateDamage |
+| src/gacha/gacha.c/.h | gachaMenu, rollRarity, findItemInInventory, pullOnce |
+| src/inventory/inventory.c/.h | inventoryMenu, sortInventory, searchItemByName, equipItem |
+| src/shop/shop.c/.h | shopMenu (beli potion, jual item) |
+| src/storage/storage.c/.h | loadCatalog, loadMonsters, saveGame, loadGame, recordScore, showLeaderboard |
+| src/dungeon/dungeon.c/.h | cellHash, dungeonCell, promptWorldSeed, dfsReachable, bfsShortestPath, runDungeon, resumeDungeon |
+| src/platform/rng.c/.h | PRNG xorshift64* yang state-nya bisa disimpan (`plat_srand`, `plat_rand`, `plat_rng_state`, `plat_rng_set`) |
+| src/platform/atomicfile.c/.h | Tulis atomik (tmp + fsync + rename) dan pembersihan tmp yatim |
+| src/platform/lock.c/.h | Kunci sesi `data/session.lock` (RUNNING/CLEAN) |
+| src/platform/sig.c/.h | Sinyal shutdown: self-pipe + poll (POSIX), SetConsoleCtrlHandler (Windows) |
+| src/platform/crash.c/.h | Handler crash di sigaltstack: pulihkan terminal, catat `data/crash.log` |
+| src/platform/autosave.c/.h | Thread autosave (debounce, CRC, rotasi .bak, backoff) |
+| src/platform/platform.c/.h | platform_init/shutdown, status sesi sebelumnya, toggle permintaan shutdown |
+| data/ | item.txt, monster.txt (runtime: save.txt, leaderboard.txt, autosave.dat/.bak, session.lock, crash.log) |
 | tests/ | Driver uji C + skenario input pipa + run_tests.sh |
 
 Nama fungsi dan komentar di kode memakai bahasa Inggris. Teks yang dilihat
 pemain tetap bahasa Indonesia.
+
+## Berkas runtime di data/
+
+Dibuat saat bermain, tidak perlu di-commit (ada di `.gitignore`):
+
+| Berkas | Isi |
+| --- | --- |
+| `save.txt` | Progres manual (format di bawah) |
+| `leaderboard.txt` | 10 skor teratas |
+| `autosave.dat` | Snapshot biner: magic `GQAS`, versi, panjang, CRC32, lalu struct `AutoSnapshot` (pemain, layar aktif, state battle/dungeon, state RNG) |
+| `autosave.bak` | Snapshot sebelumnya, dipakai bila `autosave.dat` rusak/terpotong |
+| `session.lock` | `RUNNING pid=<pid> start=<epoch>` selama berjalan, `CLEAN` setelah keluar rapi |
+| `crash.log` | Satu baris per crash (`crash sig=<n> pid=<pid>`) |
 
 ## Format data/save.txt
 
@@ -132,19 +233,23 @@ setelah pembaruan ini.
 
 | Anggota | Peran | Modul |
 | --- | --- | --- |
-| A | Arsitek dungeon | config.h, dungeon.c/.h |
-| B | Integrator | main.c, battle.c/.h, storage.c/.h |
-| C | Gacha | gacha.c/.h |
-| D | Inventory | inventory.c/.h |
-| E | Shop dan status | shop.c/.h, player.c/.h, util.c/.h |
+| A | Arsitek dungeon | src/core/config.h, src/dungeon/dungeon.c/.h |
+| B | Integrator | main.c, src/battle/battle.c/.h, src/storage/storage.c/.h |
+| C | Gacha | src/gacha/gacha.c/.h |
+| D | Inventory | src/inventory/inventory.c/.h |
+| E | Shop dan status | src/shop/shop.c/.h, src/player/player.c/.h, src/util/util.c/.h |
+| bersama | Lapisan UI dan platform | src/ui/*, src/platform/* (dibagi sesuai kebutuhan revisi) |
 
 ## Pengujian
 
-`make test` menjalankan `tests/run_tests.sh` dengan 19 pemeriksaan:
+`make test` menjalankan `tests/run_tests.sh` dengan 20 pemeriksaan:
 - Driver C (logika murni): readInt/readString, level & EXP, damage,
   rarity/pity/duplikat, sort & search inventory, katalog/monster/save-load
   round-trip termasuk seed, leaderboard, serta determinisme sel dungeon,
   BFS, dan DFS.
+- Platform (`tests/t_platform.c`): round-trip state RNG, snapshot autosave
+  (payload utuh), penolakan snapshot rusak/terpotong, fallback `.bak`, tulis
+  atomik, serta isi `session.lock` (`RUNNING pid=` lalu `CLEAN`).
 - Skenario menu: input pipa dari file ke program utama, hasil dicek grep.
   S16 memastikan seed 777 dipakai lagi setelah simpan dan Lanjutkan.
 - `make debug` mengulang seluruh pengujian dengan AddressSanitizer + UBSan.

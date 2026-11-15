@@ -108,11 +108,16 @@ Style ui_log_style_at(int i)
 
 void ui_frame(const char *screen)
 {
-    char label[64];
+    const Glyphs *g = caps_glyphs();
+    int i;
+
     render_clear();
-    render_text(0, 0, ST_TITLE, "Gacha Quest");
-    snprintf(label, sizeof label, "%s", screen);
-    render_text(0, UI_COLS - (int)ui_visible_len(label), ST_DIM, "%s", label);
+    if (caps_unicode())
+        render_text(0, 0, ST_TITLE, "GACHA QUEST · %s", screen);
+    else
+        render_text(0, 0, ST_TITLE, "GACHA QUEST > %s", screen);
+    for (i = 0; i < UI_COLS; i++)
+        render_text(1, i, ST_BORDER, "%s", g->hz);
 }
 
 void ui_flush(void) { render_flush(); }
@@ -181,7 +186,7 @@ void ui_wait_enter(const char *text)
     }
     {
         char ch;
-        render_text(UI_ROWS - 2, 0, ST_DIM, "%s", text);
+        render_text(render_max_row() + 2, 0, ST_DIM, "%s", text);
         ui_flush();
         for (;;) {
             TermKey k = term_getkey(&ch);
@@ -267,12 +272,49 @@ int ui_menu_pick(const char *const *items, const int *nums, int n,
     }
 }
 
-void ui_line_begin(void)
+static char inputScreen[64] = "Input";
+static char inputPrompt[192];
+static int promptRow, promptCol;
+
+void ui_input_screen(const char *name)
 {
-    if (caps_interactive()) {
-        term_cooked();
-        term_cursor(1);
+    snprintf(inputScreen, sizeof inputScreen, "%s", name);
+}
+
+/* Input frame: single-line header, panel with label, accent "> " prompt.
+   The prompt sits on grid row 3 (baris 4), independent of terminal size. */
+static void drawInputFrame(void)
+{
+    render_clear();
+    if (caps_unicode())
+        render_text(0, 0, ST_TITLE, "GACHA QUEST · %s", inputScreen);
+    else
+        render_text(0, 0, ST_TITLE, "GACHA QUEST > %s", inputScreen);
+    ui_panel(1, 0, 50, 5, "Input");
+    render_text(2, 2, ST_TEXT, "%s", inputPrompt);
+    promptRow = 3;
+    promptCol = 2;
+    render_text(promptRow, 0, ST_ACCENT, "> ");
+    render_text(render_max_row() + 2, 0, ST_DIM, "Enter konfirmasi  Esc batal");
+}
+
+void ui_line_begin(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(inputPrompt, sizeof inputPrompt, fmt, args);
+    va_end(args);
+    if (!caps_interactive()) {
+        printf("%s", inputPrompt);
+        fflush(stdout);
+        return;
     }
+    drawInputFrame();
+    ui_flush();
+    printf("\033[%d;%dH", promptRow + 1, promptCol + 1);
+    fflush(stdout);
+    term_cursor(1);
+    term_cooked();
 }
 
 void ui_line_end(void)
@@ -283,37 +325,57 @@ void ui_line_end(void)
     }
 }
 
-void ui_line_prompt(const char *fmt, ...)
+void ui_line_prompt(void)
 {
-    va_list args;
-    va_start(args, fmt);
-    if (caps_interactive()) {
-        char buf[192];
-        vsnprintf(buf, sizeof buf, fmt, args);
-        va_end(args);
-        printf("\033[%d;1H\033[2K%s", caps_rows(), buf);
+    if (!caps_interactive()) {
+        printf("%s", inputPrompt);
         fflush(stdout);
-    } else {
-        vprintf(fmt, args);
-        va_end(args);
+        return;
     }
+    printf("\033[%d;%dH", promptRow + 1, promptCol + 1);
+    fflush(stdout);
+}
+
+/* Shared tail: redraw the frame, print one line below the prompt, put the
+   cursor back. The frame redraw wipes the old prompt and typed text. */
+static void lineNote(Style st, const char *buf)
+{
+    drawInputFrame();
+    render_text(promptRow + 1, 0, st, "%s", buf);
+    ui_flush();
+    printf("\033[%d;%dH", promptRow + 1, promptCol + 1);
+    fflush(stdout);
 }
 
 void ui_line_error(const char *fmt, ...)
 {
     va_list args;
+    char buf[192];
     va_start(args, fmt);
-    if (caps_interactive()) {
-        char buf[192];
-        vsnprintf(buf, sizeof buf, fmt, args);
-        va_end(args);
-        printf("\033[%d;1H\033[2K\033[0m%s%s", caps_rows() - 1, style_fg(ST_DANGER), buf);
-        fflush(stdout);
-    } else {
-        vprintf(fmt, args);
-        va_end(args);
+    vsnprintf(buf, sizeof buf, fmt, args);
+    va_end(args);
+    if (!caps_interactive()) {
+        fputs(buf, stdout);
         printf("\n");
+        fflush(stdout);
+        return;
     }
+    lineNote(ST_DANGER, buf);
+}
+
+void ui_line_note(const char *fmt, ...)
+{
+    va_list args;
+    char buf[192];
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof buf, fmt, args);
+    va_end(args);
+    if (!caps_interactive()) {
+        printf("%s\n", buf);
+        fflush(stdout);
+        return;
+    }
+    lineNote(ST_SUCCESS, buf);
 }
 
 /* Row picker for tables. Keys: arrows move, Enter confirms, Esc cancels. */

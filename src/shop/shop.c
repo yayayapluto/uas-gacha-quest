@@ -7,6 +7,7 @@
 #include "gacha.h"
 #include "ui.h"
 #include "render.h"
+#include "autosave.h"
 
 static void shopDraw(void *ctx, int sel)
 {
@@ -16,8 +17,8 @@ static void shopDraw(void *ctx, int sel)
 
     ui_frame("Shop");
     ui_status_panel_at(p, 2, 0, UI_COLS);
-    ui_menu_v(10, 2, items, nums, 3, sel);
-    ui_message(18);
+    ui_menu_v(9, 0, items, nums, 3, sel);
+    ui_message(13);
     ui_footer(NULL);
 }
 
@@ -26,6 +27,7 @@ void shopMenu(Player *p)
     static const char *items[] = { "Beli potion (40 gold)", "Jual item", "Kembali" };
     static const int nums[] = { 1, 2, 0 };
 
+    ui_input_screen("Shop");
     for (;;) {
         int choice = ui_menu_pick(items, nums, 3, 0, 2, shopDraw, p);
         if (choice == 0) return;
@@ -46,6 +48,7 @@ void shopMenu(Player *p)
             p->gold -= amount * POTION_COST;
             p->potion += amount;
             set_message("Beli %d potion. Gold: %d, Potion: %d.", amount, p->gold, p->potion);
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
             break;
         }
         case 2: {
@@ -81,6 +84,7 @@ void shopMenu(Player *p)
                 p->itemCount--;
                 syncEquipped(p, oldWeaponId, oldArmorId);
             }
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
             break;
         }
         }

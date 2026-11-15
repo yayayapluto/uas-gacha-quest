@@ -15,22 +15,22 @@ static void drawAll(void)
     int i;
 
     ui_frame("Preview");
-    ui_panel(2, 0, UI_COLS, 8, "Panel");
+    ui_panel(2, 0, 50, 8, "Panel");
     for (i = 0; i < 12; i++)
-        render_text(3 + i / 6, 2 + (i % 6) * 13, toks[i], "%s", names[i]);
-    ui_hp_bar(6, 2, 20, 65, 100);
-    ui_hp_bar(6, 26, 20, 45, 100);
-    ui_hp_bar(6, 50, 20, 15, 100);
-    ui_bar(8, 2, 30, 40, 100, ST_SUCCESS);
-    ui_bar(8, 40, 30, 70, 100, ST_GOLD);
+        render_text(3 + i / 4, 2 + (i % 4) * 12, toks[i], "%s", names[i]);
+    ui_hp_bar(6, 2, 14, 65, 100);
+    ui_hp_bar(6, 18, 14, 45, 100);
+    ui_hp_bar(6, 34, 14, 15, 100);
+    ui_bar(7, 2, 22, 40, 100, ST_SUCCESS);
+    ui_bar(7, 26, 22, 70, 100, ST_GOLD);
     {
         static const char *items[] = { "Pilihan satu", "Pilihan dua", "Pilihan tiga" };
         static const int nums[] = { 1, 2, 3 };
-        ui_menu_v(12, 2, items, nums, 3, 1);
-        ui_menu_h(17, 2, items, nums, 3, 0);
+        ui_menu_v(10, 0, items, nums, 3, 1);
+        ui_menu_h(14, 0, items, nums, 3, 0);
     }
     set_message("Contoh pesan sistem.");
-    ui_message(21);
+    ui_message(16);
     ui_footer(NULL);
 }
 

@@ -5,6 +5,8 @@
 #include "util.h"
 #include "ui.h"
 #include "render.h"
+#include "rng.h"
+#include "autosave.h"
 
 const char *rarityName(int rarity)
 {
@@ -38,7 +40,7 @@ int findItemInInventory(const Player *p, int id)
 
 int rollRarity(int *pity)
 {
-    int roll = rand() % 100 + 1;
+    int roll = plat_rand() % 100 + 1;
     int r;
 
     if (roll >= 98) r = RARITY_LEGENDARY;
@@ -69,7 +71,7 @@ void pullOnce(Player *p, const Item catalog[], int count, int rarity)
             candidateCount++;
         }
     if (candidateCount == 0) return;
-    picked = rand() % candidateCount;
+    picked = plat_rand() % candidateCount;
     index = findItemInInventory(p, candidates[picked].id);
     if (index >= 0) {
         int price = duplicatePrice(candidates[picked].rarity);
@@ -97,19 +99,19 @@ static void gachaDraw(void *ctx, int sel)
     ui_frame("Gacha");
     ui_status_panel_at(p, 2, 0, UI_COLS);
 
-    ui_panel(9, 0, 40, 5, "PULL");
+    ui_panel(8, 0, 50, 5, "PULL");
     snprintf(buf, sizeof buf, "Pity      : %d/%d", p->pity, PITY_THRESHOLD);
-    render_text(10, 2, ST_TEXT, "%s", buf);
+    render_text(9, 2, ST_TEXT, "%s", buf);
     snprintf(buf, sizeof buf, "Total pull: %d", p->totalPull);
-    render_text(11, 2, ST_TEXT, "%s", buf);
-    ui_bar(12, 2, 32, p->pity, PITY_THRESHOLD, ST_GOLD);
+    render_text(10, 2, ST_TEXT, "%s", buf);
+    ui_bar(11, 2, 44, p->pity, PITY_THRESHOLD, ST_GOLD);
 
-    logRow = 16;
+    logRow = 14;
     start = ui_log_count() > 4 ? ui_log_count() - 4 : 0;
     for (i = start; i < ui_log_count(); i++)
         render_text(logRow++, 0, ui_log_style_at(i), "%s", ui_log_text(i));
 
-    ui_menu_v(21, 2, items, nums, 3, sel);
+    ui_menu_v(18, 0, items, nums, 3, sel);
     ui_footer(NULL);
 }
 
@@ -132,6 +134,7 @@ void gachaMenu(Player *p, const Item catalog[], int count)
             p->gold -= PULL_COST;
             p->totalPull++;
             pullOnce(p, catalog, count, rollRarity(&p->pity));
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
         } else {
             int i;
             if (p->gold < PULL10_COST) {
@@ -144,6 +147,7 @@ void gachaMenu(Player *p, const Item catalog[], int count)
                 p->totalPull++;
                 pullOnce(p, catalog, count, rollRarity(&p->pity));
             }
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
         }
         gachaDraw(p, -1);
         ui_wait_enter("Tekan Enter untuk lanjut...");

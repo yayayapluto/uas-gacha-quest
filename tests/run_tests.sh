@@ -13,10 +13,10 @@ case "$CC" in
     ;;
 esac
 CFLAGS="-std=c11 -Wall -Wextra -Wpedantic"
-INC="-Isrc/core -Isrc/util -Isrc/ui -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon"
+INC="-Isrc/core -Isrc/util -Isrc/ui -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon -Isrc/platform"
 CFLAGS="$CFLAGS $INC"
 SAN="${1:-}"
-LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c src/ui/render.c src/ui/widgets.c"
+LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c src/ui/render.c src/ui/widgets.c src/platform/rng.c src/platform/atomicfile.c src/platform/lock.c src/platform/sig.c src/platform/crash.c src/platform/autosave.c src/platform/platform.c"
 
 PASS=0
 FAIL=0
@@ -67,6 +67,7 @@ $CC $CFLAGS $SAN -o bin/t_inventory tests/t_inventory.c $LIB
 $CC $CFLAGS $SAN -o bin/t_storage tests/t_storage.c $LIB
 $CC $CFLAGS $SAN -o bin/t_leaderboard tests/t_leaderboard.c $LIB
 $CC $CFLAGS $SAN -o bin/t_dungeon tests/t_dungeon.c $LIB
+$CC $CFLAGS $SAN -o bin/t_platform tests/t_platform.c $LIB
 $CC $CFLAGS $SAN -o bin/game main.c $LIB
 
 echo "=== Pengujian otomatis ==="
@@ -75,6 +76,9 @@ rm -f data/leaderboard.txt
 driver "S08 urut & cari inventory" bin/t_inventory
 driver "S06/S07 rarity, pity, duplikat" bin/t_gacha
 driver "S12/S14 dungeon prosedur: seed deterministik, DFS & BFS" bin/t_dungeon
+
+rm -f data/autosave.dat data/autosave.bak
+driver "S17 autosave atomik: CRC, .bak, kunci sesi" bin/t_platform
 
 driver "S10 save-load round trip" bin/t_storage
 driver "S15 leaderboard urut & top 10" bin/t_leaderboard

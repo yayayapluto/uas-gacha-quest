@@ -14,22 +14,20 @@
 #include "ui.h"
 #include "render.h"
 #include "caps.h"
+#include "platform.h"
+#include "autosave.h"
+#include "rng.h"
 
 /* Shows the main menu and returns the player choice. */
 static void mainMenuDraw(void *ctx, int sel)
 {
     static const char *items[] = { "Game Baru", "Lanjutkan", "Leaderboard", "Keluar" };
     static const int nums[] = { 1, 2, 3, 0 };
-    const Glyphs *g = caps_glyphs();
-    int i;
     (void)ctx;
 
     ui_frame("Menu Utama");
-    render_text(2, 0, ST_TITLE, "G A C H A   Q U E S T");
-    for (i = 0; i < 22; i++)
-        render_text(3, i, ST_BORDER, "%s", g->hz);
-    ui_menu_v(5, 2, items, nums, 4, sel);
-    ui_message(20);
+    ui_menu_v(2, 0, items, nums, 4, sel);
+    ui_message(7);
 }
 
 int mainMenu(void)
@@ -50,8 +48,8 @@ static void hubMenuDraw(void *ctx, int sel)
 
     ui_frame("Hub");
     ui_status_panel_at(p, 2, 0, UI_COLS);
-    ui_menu_v(9, 2, items, nums, 8, sel);
-    ui_message(20);
+    ui_menu_v(9, 0, items, nums, 8, sel);
+    ui_message(18);
 }
 
 /* Shows the game hub and returns the player choice. */
@@ -69,7 +67,16 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
     int saved = 0;
 
     for (;;) {
-        int choice = hubMenu(p);
+        int choice;
+        char err[160];
+        if (platform_shutdown_requested()) return;
+        if (autosave_poll_error(err, (int)sizeof err))
+            set_message("Autosave gagal: %s", err);
+        choice = hubMenu(p);
+        if (choice < 0 || platform_shutdown_requested()) {
+            if (!platform_shutdown_requested()) autosave_publish(p, AS_SCREEN_MENU, NULL, 0, NULL, 0, 0, 1);
+            return;
+        }
         switch (choice) {
         case 1: startBattle(p, monsters, monsterCount); break;
         case 2: gachaMenu(p, catalog, catalogCount); break;
@@ -81,10 +88,12 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
         case 0: {
             char answer[MAX_NAME];
             if (!saved) {
+                ui_input_screen("Hub");
                 readString("Simpan sebelum keluar? (y/n): ", answer, MAX_NAME);
                 if (answer[0] == 'y' || answer[0] == 'Y') saveGame(p);
             }
             recordScore(p);
+            autosave_publish(p, AS_SCREEN_MENU, NULL, 0, NULL, 0, 0, 1);
             if (last_message()[0] != '\0')
                 set_message("%s Kembali ke menu utama.", last_message());
             else
@@ -97,16 +106,44 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
 }
 
 /* Entry point: load catalog and monsters, then run the main menu loop. */
+static void resumeSession(const AutoSnapshot *snap, const Item catalog[], int catalogCount,
+                          const Monster monsters[], int monsterCount)
+{
+    Player p = snap->player;
+    plat_rng_set(snap->rng);
+    switch (snap->screen) {
+    case AS_SCREEN_BATTLE:
+        if (snap->battleActive) {
+            resumeBattle(&p, snap->battleEnemy, snap->battleEnemyHp);
+            runHub(&p, catalog, catalogCount, monsters, monsterCount);
+            return;
+        }
+        break;
+    case AS_SCREEN_DUNGEON:
+        if (snap->dungeonActive) {
+            resumeDungeon(&p, &snap->dungeon, snap->dungeonSteps, snap->dungeonHints);
+            runHub(&p, catalog, catalogCount, monsters, monsterCount);
+            return;
+        }
+        break;
+    default:
+        break;
+    }
+    runHub(&p, catalog, catalogCount, monsters, monsterCount);
+}
+
 int main(void)
 {
     Item catalog[MAX_ITEM];
     Monster monsters[MAX_MONSTER];
     Player player;
+    AutoSnapshot snap;
     int catalogCount, monsterCount;
     int running = 1;
 
-    srand((unsigned)time(NULL));
-    ui_init();
+    platform_init();
+    plat_srand((unsigned)time(NULL));
+
     catalogCount = loadCatalog("data/item.txt", catalog);
     monsterCount = loadMonsters("data/monster.txt", monsters);
     if (catalogCount == 0 || monsterCount == 0) {
@@ -115,15 +152,27 @@ int main(void)
     }
     memset(&player, 0, sizeof player);
 
+    if (platform_previous_running() && autosave_load(&snap)) {
+        char answer[MAX_NAME];
+        printf("Pulihkan sesi sebelumnya? (y/n)");
+        fflush(stdout);
+        if (readLine(answer, sizeof answer) && (answer[0] == 'y' || answer[0] == 'Y')) {
+            resumeSession(&snap, catalog, catalogCount, monsters, monsterCount);
+            return 0;
+        }
+    }
+
+    ui_init();
     while (running) {
         int choice = mainMenu();
         switch (choice) {
         case 1: {
             char name[MAX_NAME];
-            readString("Masukkan nama pemain: ", name, MAX_NAME);
+            ui_input_screen("Game Baru");
+            readString("Masukkan nama pemain (maks 29 karakter): ", name, MAX_NAME);
             initPlayer(&player, name);
-            set_message("Selamat datang, %s! Kamu dapat 200 gold.", player.name);
             player.seed = promptWorldSeed();
+            set_message("Selamat datang, %s! Kamu dapat 200 gold.", player.name);
             runHub(&player, catalog, catalogCount, monsters, monsterCount);
             break;
         }

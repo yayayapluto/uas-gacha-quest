@@ -17,20 +17,27 @@ Modul di `src/ui/`, terpisah dari logika game:
 | `widgets.c/h` | Panel, tabel/menu ter-highlight, bar HP/EXP, footer hint, kotak pesan/log. |
 | `ui.c/h` | API publik yang dipakai layar game. |
 
+Modul `src/platform/` tidak menggambar apa pun, tetapi memengaruhi tampilan
+lewat tiga hal: pemulihan terminal saat sinyal/crash, tawaran memulihkan sesi
+sebelum UI aktif, dan pesan kegagalan autosave di panel pesan.
+
 Setiap layar di-redraw penuh: layar dibersihkan di grid, frame baru digambar,
 lalu menunggu input. Tidak ada lagi output yang menumpuk ke bawah.
 
 ## Geometri dan layout
 
+Gaya rata kiri dan padat; tidak ada pemusatan horizontal.
+
 | Aturan | Nilai |
 |---|---|
-| Lebar konten | 78 kolom (`UI_COLS`), dipusatkan horizontal bila terminal lebih lebar |
-| Tinggi konten | 24 baris (`UI_ROWS`) |
-| Ukuran minimum | 80x24; bila lebih kecil tampil "Perbesar terminal (min 80x24)" |
-| Baris judul | "Gacha Quest" kiri, nama layar kanan (aksen) |
+| Lebar panel | tetap 50 kolom (`UI_COLS`), rata kiri; sisa terminal dibiarkan kosong di kanan |
+| Tinggi minimum | 20 baris (`UI_ROWS`); bila lebih kecil tampil "Perbesar terminal (min 50x20)" |
+| Baris judul | `GACHA QUEST · <nama layar>` rata kiri (ASCII: `GACHA QUEST > <nama layar>`), lalu satu baris garis |
 | Panel status pemain | nama, level, bar HP, gold, potion — di hub/battle/gacha/inventory/shop/status |
 | Panel pesan sistem | 1-5 baris terakhir menggantikan printf di tengah layar |
-| Footer | petunjuk tombol: "↑↓ pilih  Enter konfirmasi  Esc kembali" |
+| Footer | dicetak langsung di bawah konten, dipisah satu baris kosong: "↑↓ pilih  Enter konfirmasi  Esc kembali" |
+| Jarak antar blok | maksimal 1 baris kosong; padding dalam panel 1 spasi horizontal, 0 vertikal |
+| Highlight menu | hanya selebar teks item |
 | Bar HP/EXP | `█` terisi, `░` kosong (ASCII: `#` dan `-`) |
 
 ## Deteksi kemampuan (deteksi, bukan tebak)
@@ -115,20 +122,28 @@ karakter `█`/`░` saja. Info penting selalu disertai teks/simbol (mis. tag
 
 ## Tangkapan layar (ASCII, ANSI-stripped)
 
-Contoh frame showcase widget (panel, bar HP tiga ambang, menu ter-highlight):
+Contoh frame showcase widget (panel, bar HP tiga ambang, menu ter-highlight),
+rata kiri selebar 50 kolom:
 
 ```
-Gacha Quest                                                          Preview
-+Panel-----------------------------------------------------------------------+
-| text         title        accent       border       dim          gold      |
-| danger       success      common       rare         epic         legendary |
-|                                                                            |
-|  ###########-------      ########----------      ##----------------        |
-|                                                                            |
-|  ###########-----------------          ###################---------        |
-+----------------------------------------------------------------------------+
-  > 1. Pilihan dua
-    2. Pilihan tiga
+GACHA QUEST > Preview
+--------------------------------------------------
++Panel-------------------------------------------+
+| text        title       accent      border     |
+| dim         gold        danger      success    |
+| common      rare        epic        legendary  |
+|  #######-----    #####-------    #-----------  |
+|  ########------------    ##############------  |
++------------------------------------------------+
+  1. Pilihan satu
+> 2. Pilihan dua
+  3. Pilihan tiga
+
+  1. Pilihan satu    2. Pilihan dua    3. Pilihan tiga
+
+> Contoh pesan sistem.
+
+Up/Down pilih  Enter konfirmasi  Esc kembali
 ```
 
 ## Kode ANSI (legacy)
@@ -161,12 +176,43 @@ Pilih:
 
 ## 2. Game Baru — input nama & seed
 
+Interaktif: nama dan seed ditanyakan sebagai **dua langkah terpisah**, masing-masing
+dengan frame input sendiri (header `GACHA QUEST · Game Baru`, panel label, prompt
+`> ` berwarna accent, footer `Enter konfirmasi  Esc batal`). Prompt selalu di baris 4
+dari atas, tidak tergantung ukuran terminal. Error validasi tampil di baris tepat di
+bawah prompt (warna danger) lalu frame digambar ulang.
+
 ```
-Pilih: Masukkan nama pemain: Seed dunia (Enter saja untuk acak): Seed acak dipilih: 1794728246
+GACHA QUEST · Game Baru
++Input-------------------------------------------+
+| Masukkan nama pemain (maks 29 karakter):       |
+| >                                              |
++------------------------------------------------+
+
+Enter konfirmasi  Esc batal
+```
+
+lalu langkah seed:
+
+```
+GACHA QUEST · Game Baru
++Input-------------------------------------------+
+| Seed dunia (Enter saja untuk acak):            |
+| >                                              |
++------------------------------------------------+
+
+Enter konfirmasi  Esc batal
 ```
 
 Seed dikosongkan -> `Seed acak dipilih: <angka>`. Seed diisi angka -> dipakai apa adanya.
 Seed tidak valid -> `Seed harus angka bulat 0 sampai 4294967295.`
+
+Mode non-interaktif (stdin pipe) tetap satu baris prompt polos tanpa escape code,
+seperti versi lama:
+
+```
+Pilih: Masukkan nama pemain (maks 29 karakter): Seed dunia (Enter saja untuk acak): Seed acak dipilih: 1794728246
+```
 
 Pesan sambutan:
 
@@ -569,6 +615,42 @@ Keluar dari game:
 Terima kasih sudah bermain Gacha Quest!
 ```
 
+## 12b. Startup, sesi, dan autosave
+
+Pesan ini dicetak dengan `printf` biasa, **sebelum** `ui_init()`, sehingga
+muncul di terminal yang masih mode cooked:
+
+```
+Game sudah berjalan di terminal lain.
+```
+Instance kedua langsung keluar dengan status 1 (tidak ada layar yang digambar).
+
+```
+Pulihkan sesi sebelumnya? (y/n)
+```
+Muncul hanya bila sesi sebelumnya berakhir tidak wajar (`session.lock` masih
+`RUNNING`) dan `data/autosave.dat` (atau `.bak`) lolos validasi. Jawaban `y`
+langsung membuka layar tempat sesi berhenti:
+
+| State tersimpan | Layar pertama setelah `y` |
+| --- | --- |
+| sedang battle | Battle dengan monster dan HP tersisa yang sama |
+| sedang di dungeon | Dungeon pada posisi, langkah, hint, dan peta yang sama |
+| di hub/menu | Hub dengan progres terakhir |
+
+Jawaban selain `y` (termasuk Enter/EOF) tetap ke Menu Utama seperti biasa.
+
+Kegagalan tulis autosave tampil sekali di panel pesan layar berikutnya, tanpa
+menghentikan permainan:
+
+```
+Autosave gagal: <alasan dari sistem berkas>.
+```
+
+Tidak ada indikator autosave sukses di layar; keberhasilan hanya terlihat dari
+isi `data/autosave.dat`. Simpan manual (hub menu 7) tetap pesan lama
+"Progres tersimpan di data/save.txt.".
+
 ## 13. Validasi input (semua layar)
 
 ```
@@ -595,6 +677,9 @@ Input berakhir (EOF).
 | Status | `src/player/player.c` (`showStatus`) |
 | Dungeon | `src/dungeon/dungeon.c` |
 | Simpan/muat, Leaderboard | `src/storage/storage.c` |
+| Tawaran pulihkan sesi, pesan kunci sesi | `main.c` (`main`) |
+| Pesan "Autosave gagal" | `main.c` (`runHub`, dari `autosave_poll_error`) |
+| Restore battle / dungeon | `battle.c` (`resumeBattle`), `dungeon.c` (`resumeDungeon`) |
 
 ---
 
@@ -608,10 +693,17 @@ Input berakhir (EOF).
    konsol Windows mendukung UTF-8 walau `LANG` tidak diset. `GACHA_ASCII=1`
    tetap bisa memaksa ASCII. Aturan `LANG` (C→ASCII, UTF-8→Unicode) berlaku penuh
    di POSIX dan di Windows sebelum VT aktif.
-3. **Lebar tetap 78 kolom, dipusatkan.** Lebih aman untuk perataan tabel
-   (inventory/shop/leaderboard) daripada layout penuh selebar terminal.
+3. **Lebar panel tetap 50 kolom, rata kiri.** Lebih aman untuk perataan tabel
+   (inventory/shop/leaderboard) daripada layout penuh selebar terminal; sisa
+   kolom di kanan dibiarkan kosong.
 4. **q/ESC pada dungeon langsung keluar** (bukan prompt), sesuai perilaku lama
    "Q keluar"; tidak menambah langkah konfirmasi.
 5. **Pesan EOF non-interaktif** dipertahankan persis ("Input berakhir (EOF)...").
 6. **Bar HP mono** mengandalkan `█`/`░`; ambang warna tidak dipakai agar tetap
    konsisten terbaca tanpa warna.
+7. **Tanpa indikator autosave di layar.** Menulis status autosave ke panel
+   setiap aksi akan berkedip dan menimpa pesan aksi; kegagalan saja yang
+   dilaporkan karena itu satu-satunya hal yang butuh tindakan pemain.
+8. **Pemulihan sesi memakai `printf` biasa.** Ditanyakan sebelum UI aktif agar
+   pemain bisa menjawab walaupun terminal belum siap untuk raw mode; sesudah
+   itu layar game mengambil alih seperti biasa.

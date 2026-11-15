@@ -6,6 +6,7 @@
 #include "util.h"
 #include "ui.h"
 #include "render.h"
+#include "autosave.h"
 
 static void inventoryDraw(void *ctx, int sel)
 {
@@ -22,7 +23,7 @@ static void inventoryDraw(void *ctx, int sel)
     render_text(9, 0, ST_TITLE, "%s", buf);
     render_text(10, 0, ST_DIM, "%-4s %-20s %-4s %-10s %-5s %s",
                 "Idx", "Nama", "Tipe", "Rarity", "Power", "Terpasang");
-    for (i = 0, row = 11; i < p->itemCount && i < 8; i++, row++) {
+    for (i = 0, row = 11; i < p->itemCount && i < 6; i++, row++) {
         const char *eq = i == p->weaponIndex ? "[SENJATA]"
                        : (i == p->armorIndex ? "[ARMOR]" : "");
         render_text(row, 0, style_rarity(p->inventory[i].rarity),
@@ -35,7 +36,7 @@ static void inventoryDraw(void *ctx, int sel)
                     p->inventory[i].power, eq);
     }
 
-    ui_menu_v(20, 2, items, nums, 4, sel);
+    ui_menu_v(18, 0, items, nums, 4, sel);
     ui_footer(NULL);
 }
 
@@ -55,6 +56,7 @@ void inventoryMenu(Player *p)
     static const char *items[] = { "Urutkan", "Cari item", "Equip item", "Kembali" };
     static const int nums[] = { 1, 2, 3, 0 };
 
+    ui_input_screen("Inventory");
     for (;;) {
         int choice = ui_menu_pick(items, nums, 4, 0, 3, inventoryDraw, p);
         if (choice == 0) return;
@@ -64,6 +66,7 @@ void inventoryMenu(Player *p)
             mode = readInt("Urutkan berdasarkan (1 rarity, 2 power, 3 nama): ", 1, 3);
             sortInventory(p, mode);
             set_message("Inventory terurut.");
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
             break;
         }
         case 2: {
@@ -89,6 +92,7 @@ void inventoryMenu(Player *p)
             }
             equipItem(p, index);
             set_message("%s dipasang.", p->inventory[index].name);
+            autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
             break;
         }
         }

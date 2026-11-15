@@ -10,5 +10,6 @@ unsigned int promptWorldSeed(void);
 int dfsReachable(char area[][AREA_MAX], Point from, Point to);
 int bfsShortestPath(char area[][AREA_MAX], Point from, Point to, Point path[]);
 void runDungeon(Player *p);
+void resumeDungeon(Player *p, const DungeonState *saved, int steps, int hints);
 
 #endif

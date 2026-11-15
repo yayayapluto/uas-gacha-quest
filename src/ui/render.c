@@ -9,6 +9,7 @@
 
 static Cell grid[GRID_MAX_ROWS][GRID_MAX_COLS];
 static char outBuf[32 * 1024];
+static int maxUsedRow = -1;
 
 /* visible column width of a UTF-8 string: ANSI escapes skipped, 1 col per codepoint */
 int ui_visible_len(const char *s)
@@ -84,6 +85,7 @@ void render_clear(void)
             grid[r][c].cp = 0;
             grid[r][c].st = ST_TEXT;
         }
+    maxUsedRow = -1;
 }
 
 void render_char(int row, int col, Style s, unsigned int cp)
@@ -91,7 +93,10 @@ void render_char(int row, int col, Style s, unsigned int cp)
     if (row < 0 || row >= GRID_MAX_ROWS || col < 0 || col >= GRID_MAX_COLS) return;
     grid[row][col].cp = cp;
     grid[row][col].st = s;
+    if (row > maxUsedRow) maxUsedRow = row;
 }
+
+int render_max_row(void) { return maxUsedRow; }
 
 void render_text(int row, int col, Style s, const char *fmt, ...)
 {
@@ -128,34 +133,27 @@ void render_flush(void)
     int r;
     size_t n = 0;
     int interactive = caps_interactive();
-    int xoff = 0;
+    int maxRow = render_max_row();
 
     if (interactive) {
         if (caps_cols() < UI_COLS || caps_rows() < UI_ROWS) {
-            int col = caps_cols() > 0 ? (caps_cols() - 28) / 2 : 0;
-            if (col < 0) col = 0;
-            printf("\033[H\033[2J\033[0m%s", "Perbesar terminal (min 80x24)");
-            if (caps_cols() >= 28) printf("\033[1;%dH", col + 1);
-            printf("\033[H");
+            printf("\033[H\033[2J\033[0mPerbesar terminal (min %dx%d)", UI_COLS, UI_ROWS);
             fflush(stdout);
             return;
         }
-        xoff = (caps_cols() - UI_COLS) / 2;
-        n += (size_t)sprintf(outBuf + n, "\033[H");
+        n += (size_t)sprintf(outBuf + n, "\033[H\033[2J");
     }
 
-    for (r = 0; r < UI_ROWS; r++) {
+    for (r = 0; r <= maxRow; r++) {
         int last = -1;
         Style cur = ST_TEXT;
         int started = 0;
         int c;
-        for (c = UI_COLS - 1; c >= 0; c--)
+        for (c = GRID_MAX_COLS - 1; c >= 0; c--)
             if (grid[r][c].cp != 0) { last = c; break; }
         if (last < 0 && !interactive) continue;
-        if (interactive) {
-            if (r > 0) n += (size_t)sprintf(outBuf + n, "\033[%d;%dH", r + 1, xoff + 1);
-            n += (size_t)sprintf(outBuf + n, "\033[2K");
-        }
+        if (interactive)
+            n += (size_t)sprintf(outBuf + n, "\033[%d;1H", r + 1);
         cur = ST_TEXT;
         for (c = 0; c <= last; c++) {
             Cell *cell = &grid[r][c];
