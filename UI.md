@@ -115,6 +115,19 @@ Token, bukan warna per layar (`style.h`). Nilai RGB awal:
 | rarity legendary | #D53F8C |
 | selected_bg | #2D3748 (teks accent) |
 
+Kontras tiap token terhadap latar gelap (WCAG rasio, ambang teks normal 4.5:1):
+
+| Latar | dim | accent | text |
+|---|---|---|---|
+| hitam | 5.2:1 | 9.4:1 | 17.0:1 |
+| #1E1E1E | 4.2:1 | 7.5:1 | 13.5:1 |
+| panel #2D3748 | 3.0:1 | 5.4:1 | 9.7:1 |
+
+Karena `dim` gagal ambang 4.5:1 di latar panel, petunjuk jeda
+("Tekan Enter untuk lanjut (panah baru aktif setelah ini).") memakai `accent`,
+bukan `dim`. Ini satu-satunya petunjuk bahwa tombol panah belum berfungsi
+sebelum Enter ditekan, jadi tidak boleh tenggelam.
+
 Bar HP: truecolor mewarnai tiap sel dengan gradien halus; 256/16 memakai satu
 warna per ambang (hijau >60%, kuning 31-60%, merah ≤30%); mono terbaca dari
 karakter `█`/`░` saja. Info penting selalu disertai teks/simbol (mis. tag

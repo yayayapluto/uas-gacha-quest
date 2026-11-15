@@ -98,7 +98,7 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
                 set_message("%s Kembali ke menu utama.", last_message());
             else
                 set_message("Kembali ke menu utama.");
-            ui_wait_enter("Tekan Enter untuk lanjut...");
+            ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             return;
         }
         }
@@ -180,12 +180,12 @@ int main(void)
             if (loadGame(&player, catalog, catalogCount)) {
                 runHub(&player, catalog, catalogCount, monsters, monsterCount);
             } else {
-                ui_wait_enter("Tekan Enter untuk lanjut...");
+                ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             }
             break;
         case 3:
             showLeaderboard();
-            ui_wait_enter("Tekan Enter untuk lanjut...");
+            ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             break;
         case 0:
             shutdownGame();

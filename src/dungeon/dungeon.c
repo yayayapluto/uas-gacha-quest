@@ -477,7 +477,7 @@ static void dungeonLoop(Player *p, DungeonState *st, char area[][AREA_MAX],
             }
             set_message("Keluar dungeon. Langkah total: %d.", steps);
             autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
-            ui_wait_enter("Tekan Enter untuk lanjut...");
+            ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             finished = 1;
             break;
         default:

@@ -152,6 +152,6 @@ void gachaMenu(Player *p, const Item catalog[], int count)
             autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
         }
         gachaDraw(p, -1);
-        ui_wait_enter("Tekan Enter untuk lanjut...");
+        ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
     }
 }

@@ -109,5 +109,5 @@ void showStatus(const Player *p)
 
     ui_footer(NULL);
     ui_flush();
-    ui_wait_enter("Tekan Enter untuk lanjut...");
+    ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
 }

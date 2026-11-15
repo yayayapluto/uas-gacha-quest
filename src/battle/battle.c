@@ -169,13 +169,13 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
             bc.enemyHp = enemyHp;
             battleDraw(&bc, -1);
             autosave_publish(p, AS_SCREEN_BATTLE, &enemy, enemyHp, NULL, 0, 0, 0);
-            ui_wait_enter("Tekan Enter untuk lanjut...");
+            ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             if (platform_shutdown_requested()) break;
         }
     }
     if (!platform_shutdown_requested())
         autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
-    ui_wait_enter("Tekan Enter untuk lanjut...");
+    ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
     set_message("");
 }
 

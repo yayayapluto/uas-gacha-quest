@@ -179,14 +179,16 @@ void ui_wait_enter(const char *text)
     if (!caps_interactive()) {
         char buf[16];
         if (!isatty(fileno(stdin))) return;
-        printf("%s%s%s", "\033[2m", text, "\033[0m");
+        printf("\033[1;36m%s%s", text, ANSI_RESET);
         fflush(stdout);
         if (!readLine(buf, sizeof buf)) clearerr(stdin);
         return;
     }
     {
         char ch;
-        render_text(render_max_row() + 2, 0, ST_DIM, "%s", text);
+        /* the pause hint must be readable: it is the only clue that arrow
+           keys do nothing until Enter is pressed */
+        render_text(render_max_row() + 2, 0, ST_ACCENT, "%s", text);
         ui_flush();
         for (;;) {
             TermKey k = term_getkey(&ch);
