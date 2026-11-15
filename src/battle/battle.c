@@ -204,6 +204,12 @@ void startBattle(Player *p, const Monster m[], int count)
     battleLoop(p, enemy, enemy.hp);
 }
 
+void startBattleAgainst(Player *p, const Monster *enemy)
+{
+    ui_log_clear();
+    battleLoop(p, *enemy, enemy->hp);
+}
+
 /* Continues a battle restored from the autosave with the same enemy and HP. */
 void resumeBattle(Player *p, Monster enemy, int enemyHp)
 {
