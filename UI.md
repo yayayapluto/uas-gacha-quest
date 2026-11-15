@@ -293,13 +293,22 @@ Baris HP memakai bar 10 sel: `#` terisi, `-` kosong. Warna bar ikut persentase H
 | HP musuh: 30                                   |
 | ATK 6 | DEF 0                                  |
 +------------------------------------------------+
-
++Log---------------------------------------------+
+| Potion dipakai, HP sekarang 100/100.           |
+| Goblin menyerang farras: 7 damage              |
+| farras menyerang Goblin: 9 damage              |
+| Goblin menyerang farras: 5 damage              |
++------------------------------------------------+
  1. Serang
  2. Bertahan
  3. Potion
  4. Kabur
 Aksi:
 ```
+
+Panel **Log** menampung 4 baris terakhir (log yang lebih lama dibuang). Teks
+yang lebih panjang dari dalam panel dipotong di kolom `UI_COLS - 4`, jadi
+tidak pernah menimpa garis tepi kanan.
 
 ### 6.1 Hasil aksi
 
@@ -367,13 +376,17 @@ Naik level! Sekarang level 2 (maxHp 120, ATK 13, DEF 5).
 | Pity    : 0/10                                 |
 | Total pull: 0                                  |
 +------------------------------------------------+
++Hasil-------------------------------------------+
+|   [Rare] Silver Aegis (power 12) -> baru!      |
+|   [Common] Wooden Sword -> DUPLIKAT, +20 gold  |
++------------------------------------------------+
  1. Pull 1x (100 gold)
  2. Pull 10x (900 gold)
  0. Kembali
 Pilih:
 ```
 
-Hasil pull (1x):
+Hasil pull (1x) — tampil di panel **Hasil**:
 
 ```
   [Rare] Storm Hammer (power 22) -> baru!
@@ -409,16 +422,25 @@ Gold kurang! Pull 10x butuh 900 gold.
 | HP [##########] 100/100                        |
 | Gold   : 0   Potion: 2                         |
 +------------------------------------------------+
-Inventory (2/36)
-Idx  Nama                 Tipe Rarity     Power Terpasang
-0    Storm Hammer         S    Rare       22
-1    Scale Cuirass        A    Common     8
++Inventory (2/36)--------------------------------+
+| Idx  Nama              Tipe Rarity    Power   |
+| 1*   Storm Hammer      S    Rare      22      |
+| 0#   Scale Cuirass     A    Common    8       |
+|                                               |
+|                                               |
+|                                               |
++-----------------------------------------------+
  1. Urutkan
  2. Cari item
  3. Equip item
  0. Kembali
 Pilih:
 ```
+
+Tabel inventory berada di dalam panel. Penanda terpasang menempel pada kolom
+`Idx`: `*` untuk senjata dan `#` untuk armor, supaya kolom tetap muat 46
+karakter di dalam panel 50 kolom. Nama lebih dari 17 karakter dipotong (bukan
+mendorong kolom lain).
 
 Urutkan:
 
@@ -468,11 +490,21 @@ Indeks tidak ada di inventory.
 | HP [##########] 100/100                        |
 | Gold   : 200   Potion: 2                       |
 +------------------------------------------------+
- 1. Beli potion (40 gold)
- 2. Jual item
- 0. Kembali
++Menu--------------------------------------------+
+|  1. Beli potion (40 gold)                      |
+|> 2. Jual item                                  |
+|  0. Kembali                                    |
++------------------------------------------------+
++Info--------------------------------------------+
+| Beli 2 potion. Gold: 120, Potion: 4.           |
+|                                                |
++------------------------------------------------+
 Pilih:
 ```
+
+Menu Shop dan pesan hasil aksi masing-masing berada di panel sendiri. Panel
+`Info` selalu tampil walau pesan kosong, jadi posisi menu tidak bergeser antar
+aksi.
 
 Beli potion:
 

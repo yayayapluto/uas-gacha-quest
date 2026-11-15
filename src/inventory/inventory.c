@@ -8,6 +8,8 @@
 #include "render.h"
 #include "autosave.h"
 
+#define INV_NAME_COLS 17
+
 static void inventoryDraw(void *ctx, int sel)
 {
     static const char *items[] = { "Urutkan", "Cari item", "Equip item", "Kembali" };
@@ -20,20 +22,26 @@ static void inventoryDraw(void *ctx, int sel)
     ui_status_panel_at(p, 2, 0, UI_COLS);
 
     snprintf(buf, sizeof buf, "Inventory (%d/%d)", p->itemCount, MAX_ITEM);
-    render_text(9, 0, ST_TITLE, "%s", buf);
-    render_text(10, 0, ST_DIM, "%-4s %-20s %-4s %-10s %-5s %s",
-                "Idx", "Nama", "Tipe", "Rarity", "Power", "Terpasang");
-    for (i = 0, row = 11; i < p->itemCount && i < 6; i++, row++) {
-        const char *eq = i == p->weaponIndex ? "[SENJATA]"
-                       : (i == p->armorIndex ? "[ARMOR]" : "");
-        render_text(row, 0, style_rarity(p->inventory[i].rarity),
-                    "%-4d %-20s %-4c %-10s %-5d %s",
-                    i, p->inventory[i].name, p->inventory[i].type,
-                    p->inventory[i].rarity == RARITY_COMMON ? "Common"
-                    : p->inventory[i].rarity == RARITY_RARE ? "Rare"
-                    : p->inventory[i].rarity == RARITY_EPIC ? "Epic"
-                    : "Legendary",
-                    p->inventory[i].power, eq);
+    ui_panel(8, 0, UI_COLS, 9, buf);
+    render_text_clipped(9, 2, UI_COLS - 4, ST_DIM,
+                        "%-4s %-17s %-4s %-9s %s",
+                        "Idx", "Nama", "Tipe", "Rarity", "Power");
+    for (i = 0, row = 10; i < p->itemCount && i < 6; i++, row++) {
+        char eq[8];
+        char name[INV_NAME_COLS + 1];
+        snprintf(eq, sizeof eq, "%d%s", i,
+                 i == p->weaponIndex ? "*" : (i == p->armorIndex ? "#" : ""));
+        /* %-17s only pads, so long names must be cut here to keep columns aligned */
+        memcpy(name, p->inventory[i].name, INV_NAME_COLS);
+        name[INV_NAME_COLS] = '\0';
+        render_text_clipped(row, 2, UI_COLS - 4, style_rarity(p->inventory[i].rarity),
+                            "%-4s %-17s %-4c %-9s %d",
+                            eq, name, p->inventory[i].type,
+                            p->inventory[i].rarity == RARITY_COMMON ? "Common"
+                            : p->inventory[i].rarity == RARITY_RARE ? "Rare"
+                            : p->inventory[i].rarity == RARITY_EPIC ? "Epic"
+                            : "Legendary",
+                            p->inventory[i].power);
     }
 
     ui_menu_v(18, 0, items, nums, 4, sel);

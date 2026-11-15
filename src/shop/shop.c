@@ -17,8 +17,11 @@ static void shopDraw(void *ctx, int sel)
 
     ui_frame("Shop");
     ui_status_panel_at(p, 2, 0, UI_COLS);
-    ui_menu_v(9, 0, items, nums, 3, sel);
-    ui_message(13);
+    ui_panel(9, 0, UI_COLS, 5, "Menu");
+    ui_menu_v(10, 1, items, nums, 3, sel);
+    ui_panel(15, 0, UI_COLS, 4, "Info");
+    if (last_message()[0] != '\0')
+        render_text_clipped(16, 2, UI_COLS - 4, ST_TEXT, "%s", last_message());
     ui_footer(NULL);
 }
 

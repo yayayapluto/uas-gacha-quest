@@ -16,10 +16,12 @@ typedef struct {
 void render_init(void);
 void render_clear(void);
 void render_text(int row, int col, Style s, const char *fmt, ...);
+void render_text_clipped(int row, int col, int maxW, Style s, const char *fmt, ...);
 void render_char(int row, int col, Style s, unsigned int cp);
 /* flush: interactive = styled, centered, single write; fallback = plain rows */
 void render_flush(void);
 int ui_visible_len(const char *s);
 int render_max_row(void);   /* lowest row with content, for stacking widgets */
+unsigned int render_cell_cp(int row, int col); /* codepoint at a cell, 0 when empty */
 
 #endif
