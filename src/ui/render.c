@@ -104,6 +104,8 @@ unsigned int render_cell_cp(int row, int col)
     return grid[row][col].cp;
 }
 
+int render_max_row(void) { return maxUsedRow; }
+
 void render_text(int row, int col, Style s, const char *fmt, ...)
 {
     char buf[512];
