@@ -17,6 +17,9 @@ void render_init(void);
 void render_clear(void);
 void render_text(int row, int col, Style s, const char *fmt, ...);
 void render_text_clipped(int row, int col, int maxW, Style s, const char *fmt, ...);
+/* Draws text where '~' switches between base and alt style, so one line can
+   mix colours without building ANSI strings. Returns the cells written. */
+int render_span(int row, int col, int maxW, Style base, Style alt, const char *text);
 void render_char(int row, int col, Style s, unsigned int cp);
 /* flush: interactive = styled, centered, single write; fallback = plain rows */
 void render_flush(void);

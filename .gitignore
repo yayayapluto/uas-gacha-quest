@@ -10,6 +10,7 @@ tests/out_last.txt
 
 # Runtime files (dihasilkan saat main)
 data/save.txt
+data/save_*.txt
 data/leaderboard.txt
 data/autosave.dat
 data/autosave.bak

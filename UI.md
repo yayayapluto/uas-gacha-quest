@@ -115,6 +115,19 @@ Token, bukan warna per layar (`style.h`). Nilai RGB awal:
 | rarity legendary | #D53F8C |
 | selected_bg | #2D3748 (teks accent) |
 
+Kontras tiap token terhadap latar gelap (WCAG rasio, ambang teks normal 4.5:1):
+
+| Latar | dim | accent | text |
+|---|---|---|---|
+| hitam | 5.2:1 | 9.4:1 | 17.0:1 |
+| #1E1E1E | 4.2:1 | 7.5:1 | 13.5:1 |
+| panel #2D3748 | 3.0:1 | 5.4:1 | 9.7:1 |
+
+Karena `dim` gagal ambang 4.5:1 di latar panel, petunjuk jeda
+("Tekan Enter untuk lanjut (panah baru aktif setelah ini).") memakai `accent`,
+bukan `dim`. Ini satu-satunya petunjuk bahwa tombol panah belum berfungsi
+sebelum Enter ditekan, jadi tidak boleh tenggelam.
+
 Bar HP: truecolor mewarnai tiap sel dengan gradien halus; 256/16 memakai satu
 warna per ambang (hijau >60%, kuning 31-60%, merah ≤30%); mono terbaca dari
 karakter `█`/`░` saja. Info penting selalu disertai teks/simbol (mis. tag
@@ -161,7 +174,7 @@ masih tersedia di `ui.h` untuk kompatibilitas tetapi layar baru memakai token
 ```
            GACHA QUEST
  1. Game Baru
- 2. Lanjutkan
+ 2. Load Game
  3. Leaderboard
  0. Keluar
 Pilih:
@@ -220,7 +233,20 @@ Pesan sambutan:
 Selamat datang, farras! Kamu dapat 200 gold.
 ```
 
-## 3. Lanjutkan — muat progres
+## 3. Load Game — muat progres
+
+Game menampilkan lima slot beserta nama pemain tiap slot:
+
+```
+GACHA QUEST > Load Game
+Slot 1  farras
+Slot 2  (kosong)
+Slot 3  budi
+Slot 4  (kosong)
+Slot 5  (kosong)
+Kembali
+Pilih baris (0 batal):
+```
 
 Berhasil:
 
@@ -231,8 +257,8 @@ Selamat datang kembali, farras!
 Gagal:
 
 ```
-Gagal memuat: data/save.txt tidak ada.
-Gagal memuat: format data/save.txt rusak.
+Gagal memuat: save slot %d tidak ada.
+Gagal memuat: format save slot %d rusak.
 Gagal memuat: jumlah item tidak valid.
 Gagal memuat: daftar item tidak lengkap.
 Gagal memuat: item ID %d tidak ada di katalog.
@@ -490,10 +516,18 @@ Indeks tidak ada di inventory.
 | HP [##########] 100/100                        |
 | Gold   : 200   Potion: 2                       |
 +------------------------------------------------+
-+Menu--------------------------------------------+
-|  1. Beli potion (40 gold)                      |
-|> 2. Jual item                                  |
-|  0. Kembali                                    |
++Produk------------------------------------------+
+| Nama                    Harga       Stok       |
+|> Potion               40 gold         18      |
+|                                                |
+|   Jual item             0 gold     banyak      |
+|                                                |
+| 0  Kembali                                     |
++------------------------------------------------+
++Detail------------------------------------------+
+| Potion                                         |
+| Memulihkan HP saat battle                      |
+| Punya 2 / maks 20                              |
 +------------------------------------------------+
 +Info--------------------------------------------+
 | Beli 2 potion. Gold: 120, Potion: 4.           |
@@ -502,9 +536,9 @@ Indeks tidak ada di inventory.
 Pilih:
 ```
 
-Menu Shop dan pesan hasil aksi masing-masing berada di panel sendiri. Panel
-`Info` selalu tampil walau pesan kosong, jadi posisi menu tidak bergeser antar
-aksi.
+Shop tampil sebagai daftar produk (nama, harga, stok) dengan panel `Detail`
+untuk baris yang disorot, bukan menu bernomor. Panel `Info` selalu tampil walau
+pesan kosong, jadi posisi produk tidak bergeser antar aksi.
 
 Beli potion:
 
@@ -596,7 +630,11 @@ Peta (25x15, `P` = pemain, `$` = treasure, `*` = jalur hint BFS, `#` = tembok):
 .#####.#####.#####.#####.
 .#####.#####.#####.#####.
 .#####.#####.#####.#####.
-Posisi dunia (1,1) | langkah 0 | HP 100/100 | gold 200 | seed 12345
++Status------------------------------------------+
+| Posisi dunia (1,1)   langkah 0   gold 200      |
+| HP 100/100                                     |
+| ####################        seed 12345         |
++------------------------------------------------+
 Area awal tersambung dari titik awal sampai ujung koridor (DFS).
 Gerak (W/A/S/D, H hint 30 gold, Q keluar):
 ```
@@ -626,7 +664,7 @@ Keluar dungeon. Langkah total: 1.
 Simpan (hub menu 7):
 
 ```
-Progres tersimpan di data/save.txt.
+Progres tersimpan di slot %d.
 ```
 
 Keluar dari hub:
@@ -681,7 +719,7 @@ Autosave gagal: <alasan dari sistem berkas>.
 
 Tidak ada indikator autosave sukses di layar; keberhasilan hanya terlihat dari
 isi `data/autosave.dat`. Simpan manual (hub menu 7) tetap pesan lama
-"Progres tersimpan di data/save.txt.".
+"Progres tersimpan di slot %d.".
 
 ## 13. Validasi input (semua layar)
 
@@ -699,7 +737,7 @@ Input berakhir (EOF).
 
 | Layar | File |
 |---|---|
-| Menu utama, Game Baru, Lanjutkan | `main.c` |
+| Menu utama, Game Baru, Load Game | `main.c` |
 | Box/header/HP bar | `src/ui/ui.c` |
 | Hub | `main.c` (`hubMenu`) |
 | Battle | `src/battle/battle.c` |

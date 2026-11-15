@@ -88,6 +88,16 @@ void pullOnce(Player *p, const Item catalog[], int count, int rarity)
     }
 }
 
+/* Gold warning: a red message plus a log line, so it is visible on the frame
+   the player is about to see even if they skipped the message panel. */
+static void warnGold(int need, int have)
+{
+    char buf[96];
+    set_message("Gold kurang! Butuh %d gold, kamu punya %d.", need, have);
+    snprintf(buf, sizeof buf, "kurang %d gold", need - have);
+    ui_log_event("Gold tidak cukup:", NULL, NULL, buf, ST_DANGER, ST_TEXT, ST_GOLD);
+}
+
 static void gachaDraw(void *ctx, int sel)
 {
     static const char *items[] = { "Pull 1x (100 gold)", "Pull 10x (900 gold)", "Kembali" };
@@ -121,15 +131,19 @@ void gachaMenu(Player *p, const Item catalog[], int count)
     static const char *items[] = { "Pull 1x (100 gold)", "Pull 10x (900 gold)", "Kembali" };
     static const int nums[] = { 1, 2, 0 };
 
+    /* a battle may have just ended: its action log must not leak into the
+       pull results panel */
+    ui_log_clear();
     for (;;) {
         int choice;
-        ui_log_clear();
         choice = ui_menu_pick(items, nums, 3, 0, 2, gachaDraw, p);
         if (choice == 0) return;
+        /* clear only when a new pull is about to start, so the previous
+           result stays visible on the frame drawn before it */
         ui_log_clear();
         if (choice == 1) {
             if (p->gold < PULL_COST) {
-                set_message("Gold kurang! Pull 1x butuh %d gold.", PULL_COST);
+                warnGold(PULL_COST, p->gold);
                 continue;
             }
             p->gold -= PULL_COST;
@@ -139,7 +153,7 @@ void gachaMenu(Player *p, const Item catalog[], int count)
         } else {
             int i;
             if (p->gold < PULL10_COST) {
-                set_message("Gold kurang! Pull 10x butuh %d gold.", PULL10_COST);
+                warnGold(PULL10_COST, p->gold);
                 continue;
             }
             p->gold -= PULL10_COST;
@@ -151,6 +165,6 @@ void gachaMenu(Player *p, const Item catalog[], int count)
             autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
         }
         gachaDraw(p, -1);
-        ui_wait_enter("Tekan Enter untuk lanjut...");
+        ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
     }
 }

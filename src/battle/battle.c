@@ -34,10 +34,12 @@ int attack(const char *from, const char *to, int atk, int targetDef, int *target
         *critical = 1;
     }
     *targetHp -= dmg;
-    if (*critical)
-        ui_log_style(ST_DANGER, "%s menyerang %s: %d damage (KRITIS!)", from, to, dmg);
-    else
-        ui_log("%s menyerang %s: %d damage", from, to, dmg);
+    {
+        char dmgText[40];
+        snprintf(dmgText, sizeof dmgText, *critical ? "%d damage KRITIS!" : "%d damage", dmg);
+        ui_log_event(from, "menyerang", to, dmgText, ST_ACCENT, ST_DANGER,
+                     *critical ? ST_DANGER : ST_GOLD);
+    }
     return dmg;
 }
 
@@ -77,7 +79,7 @@ static void battleDraw(void *ctx, int sel)
     start = ui_log_count() > 4 ? ui_log_count() - 4 : 0;
     logRow = 15;
     for (i = start; i < ui_log_count(); i++, logRow++)
-        render_text_clipped(logRow, 2, ui_log_style_at(i), UI_COLS - 4, "%s", ui_log_text(i));
+        ui_log_draw(logRow, 2, UI_COLS - 4, i);
 
     ui_menu_v(21, 0, items, nums, 4, sel);
     ui_footer(NULL);
@@ -110,8 +112,10 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
         case 1:
             attack(p->name, enemy.name, totalAtk(p), enemy.def, &enemyHp, &critical);
             if (enemyHp <= 0) {
-                ui_log_style(ST_SUCCESS, "%s kalah! Kamu menang!", enemy.name);
-                ui_log("Hadiah: +%d EXP, +%d gold, +%d skor.", enemy.exp, enemy.gold, enemy.exp);
+                ui_log_event(enemy.name, "kalah!", NULL, NULL, ST_DANGER, ST_TEXT, ST_TEXT);
+                ui_log_style(ST_SUCCESS, "%s menang!", p->name);
+                ui_log_style(ST_TEXT, "Hadiah: +%d EXP, +%d gold, +%d skor.",
+                             enemy.exp, enemy.gold, enemy.exp);
                 addExp(p, enemy.exp);
                 p->gold += enemy.gold;
                 p->score += enemy.exp;
@@ -122,60 +126,67 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
             break;
         case 2: {
             int dmg;
-            ui_log("Kamu bertahan.");
+            ui_log_event(p->name, "bertahan", NULL, NULL, ST_ACCENT, ST_TEXT, ST_TEXT);
             dmg = calculateDamage(enemy.atk, totalDef(p));
-            if (plat_rand() % 100 < 10) {
-                dmg *= 2;
-                ui_log_style(ST_DANGER, "%s menyerang: %d damage (KRITIS!)", enemy.name, dmg);
-            } else {
-                ui_log("%s menyerang: %d damage", enemy.name, dmg);
+            {
+                char dmgText[40];
+                if (plat_rand() % 100 < 10) dmg *= 2;
+                snprintf(dmgText, sizeof dmgText, "%d damage", dmg);
+                ui_log_event(enemy.name, "menyerang", p->name, dmgText,
+                             ST_DANGER, ST_ACCENT, ST_GOLD);
             }
             dmg /= 2;
             if (dmg < 1) dmg = 1;
             p->hp -= dmg;
-            ui_log("Karena bertahan, damage masuk hanya %d.", dmg);
+            ui_log_style(ST_DIM, "Karena bertahan, damage masuk hanya %d.", dmg);
             break;
         }
         case 3:
             if (p->potion <= 0) {
-                ui_log("Potion habis! (giliran tidak terpakai)");
+                ui_log_style(ST_DANGER, "Potion habis! (giliran tidak terpakai)");
                 break;
             }
             p->potion--;
             p->hp += 50;
             if (p->hp > p->maxHp) p->hp = p->maxHp;
-            ui_log("Potion dipakai, HP sekarang %d/%d.", p->hp, p->maxHp);
+            {
+                char hpText[40];
+                snprintf(hpText, sizeof hpText, "HP %d/%d", p->hp, p->maxHp);
+                ui_log_event(p->name, "memakai potion,", NULL, hpText,
+                             ST_ACCENT, ST_TEXT, ST_SUCCESS);
+            }
             attack(enemy.name, p->name, enemy.atk, totalDef(p), &p->hp, &critical);
             break;
         case 4:
             if (plat_rand() % 2 == 0) {
-                ui_log("Kabur berhasil! Battle selesai tanpa hadiah.");
+                ui_log_style(ST_SUCCESS, "Kabur berhasil! Battle selesai tanpa hadiah.");
                 alive = 0;
             } else {
-                ui_log("Kabur gagal!");
+                ui_log_style(ST_DANGER, "Kabur gagal!");
                 attack(enemy.name, p->name, enemy.atk, totalDef(p), &p->hp, &critical);
             }
             break;
         }
 
         if (p->hp <= 0) {
-            ui_log_style(ST_DANGER, "Kamu dikalahkan oleh %s...", enemy.name);
+            ui_log_event("Kamu dikalahkan oleh", enemy.name, NULL, "...",
+                         ST_TEXT, ST_DANGER, ST_TEXT);
             p->gold /= 2;
             p->hp = p->maxHp;
-            ui_log("Gold tinggal %d, HP dipulihkan penuh. Kembali ke hub.", p->gold);
+            ui_log_style(ST_GOLD, "Gold tinggal %d, HP dipulihkan penuh. Kembali ke hub.", p->gold);
             alive = 0;
         }
         if (alive) {
             bc.enemyHp = enemyHp;
             battleDraw(&bc, -1);
             autosave_publish(p, AS_SCREEN_BATTLE, &enemy, enemyHp, NULL, 0, 0, 0);
-            ui_wait_enter("Tekan Enter untuk lanjut...");
+            ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             if (platform_shutdown_requested()) break;
         }
     }
     if (!platform_shutdown_requested())
         autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
-    ui_wait_enter("Tekan Enter untuk lanjut...");
+    ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
     set_message("");
 }
 

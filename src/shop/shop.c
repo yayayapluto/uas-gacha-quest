@@ -9,30 +9,72 @@
 #include "render.h"
 #include "autosave.h"
 
+/* Shop as a product listing: each row is a product with its price and stock,
+   plus a detail panel for the highlighted row (typical shop layout). */
+typedef struct {
+    Player *p;
+    const char *name;
+    const char *desc;
+    int price;
+    int stock;      /* remaining potion slots; -1 when not limited */
+    char stat[64];
+} ShopRow;
+
 static void shopDraw(void *ctx, int sel)
 {
-    static const char *items[] = { "Beli potion (40 gold)", "Jual item", "Kembali" };
-    static const int nums[] = { 1, 2, 0 };
-    Player *p = ctx;
+    ShopRow *rows = ctx;
+    int i;
+    int cur = sel < 0 ? 0 : sel;  /* non-interactive draw passes -1 */
 
     ui_frame("Shop");
-    ui_status_panel_at(p, 2, 0, UI_COLS);
-    ui_panel(9, 0, UI_COLS, 5, "Menu");
-    ui_menu_v(10, 1, items, nums, 3, sel);
-    ui_panel(15, 0, UI_COLS, 4, "Info");
-    if (last_message()[0] != '\0')
-        render_text_clipped(16, 2, UI_COLS - 4, ST_TEXT, "%s", last_message());
+    ui_status_panel_at(rows[0].p, 2, 0, UI_COLS);
+
+    ui_panel(9, 0, UI_COLS, 8, "Produk");
+    render_text_clipped(10, 2, UI_COLS - 4, ST_DIM, "%-20s %8s %10s", "Nama", "Harga", "Stok");
+    for (i = 0; i < 2; i++) {
+        int row = 11 + i * 2;
+        Style st = (i == cur) ? ST_SELECTED : ST_TEXT;
+        char priceText[16], stockText[16];
+        snprintf(priceText, sizeof priceText, "%d gold", rows[i].price);
+        if (rows[i].stock < 0) snprintf(stockText, sizeof stockText, "banyak");
+        else snprintf(stockText, sizeof stockText, "%d", rows[i].stock);
+        render_text_clipped(row, 2, UI_COLS - 4, st, "%s%-19s%9s%11s",
+                            i == cur ? "> " : "  ", rows[i].name, priceText, stockText);
+    }
+    render_text_clipped(15, 2, UI_COLS - 4, ST_TEXT, "0  Kembali");
+
+    ui_panel(17, 0, UI_COLS, 5, "Detail");
+    render_text_clipped(18, 2, UI_COLS - 4, ST_ACCENT, "%s", rows[cur].name);
+    render_text_clipped(19, 2, UI_COLS - 4, ST_TEXT, "%s", rows[cur].desc);
+    render_text_clipped(20, 2, UI_COLS - 4, ST_GOLD, "%s", rows[cur].stat);
     ui_footer(NULL);
 }
 
 void shopMenu(Player *p)
 {
-    static const char *items[] = { "Beli potion (40 gold)", "Jual item", "Kembali" };
+    static const char *items[] = { "Potion", "Jual item", "Kembali" };
     static const int nums[] = { 1, 2, 0 };
+    ShopRow rows[2];
 
     ui_input_screen("Shop");
     for (;;) {
-        int choice = ui_menu_pick(items, nums, 3, 0, 2, shopDraw, p);
+        int choice;
+
+        rows[0].p = p;
+        rows[0].name = "Potion";
+        rows[0].desc = "Memulihkan HP saat battle";
+        rows[0].price = POTION_COST;
+        rows[0].stock = MAX_POTION - p->potion;
+        snprintf(rows[0].stat, sizeof rows[0].stat, "Punya %d / maks %d", p->potion, MAX_POTION);
+
+        rows[1].p = p;
+        rows[1].name = "Jual item";
+        rows[1].desc = "Jual item dari inventory";
+        rows[1].price = 0;
+        rows[1].stock = -1;
+        snprintf(rows[1].stat, sizeof rows[1].stat, "%d item di inventory", p->itemCount);
+
+        choice = ui_menu_pick(items, nums, 3, 0, 2, shopDraw, rows);
         if (choice == 0) return;
         switch (choice) {
         case 1: {
