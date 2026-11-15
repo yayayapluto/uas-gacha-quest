@@ -1,12 +1,16 @@
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra
-INC = -Isrc/core -Isrc/util -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic
+INC = -Isrc/core -Isrc/util -Isrc/ui -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon
 CFLAGS += $(INC)
 MODUL = main.c \
-        src/util/util.c src/player/player.c src/battle/battle.c \
+        src/util/util.c src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c \
+        src/ui/render.c src/ui/widgets.c src/player/player.c src/battle/battle.c \
         src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c \
         src/storage/storage.c src/dungeon/dungeon.c
 BIN = bin
+UIPREVIEW_SRC = tools/ui_preview.c \
+        src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c \
+        src/ui/render.c src/ui/widgets.c src/util/util.c
 
 ifeq ($(OS),Windows_NT)
 CC_SAN = C:/msys64/clang64/bin/clang.exe
@@ -14,13 +18,20 @@ else
 CC_SAN = $(CC)
 endif
 
-.PHONY: all clean test debug
+.PHONY: all clean test debug preview
+
+preview: $(BIN)/ui_preview
+	$(BIN)/ui_preview
 
 all: $(BIN)/game
 
 $(BIN)/game: $(MODUL)
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) -o $(BIN)/game $(MODUL)
+
+$(BIN)/ui_preview: $(UIPREVIEW_SRC)
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) -o $(BIN)/ui_preview $(UIPREVIEW_SRC)
 
 debug:
 	@mkdir -p $(BIN)

@@ -1,0 +1,617 @@
+# UI.md — Semua Layar Game Gacha Quest
+
+Dokumen ini mencatat setiap layar/UI yang ada di game. Semua teks pesan (bahasa
+Indonesia) dipertahankan persis; yang berubah hanya tata letak dan warna. Output
+di blok kode adalah hasil run sungguhan dengan kode ANSI di-strip.
+
+## Arsitektur lapisan UI
+
+Modul di `src/ui/`, terpisah dari logika game:
+
+| File | Tanggung jawab |
+|---|---|
+| `term.c/h` | Lapisan platform: raw mode, ukuran terminal, baca tombol, alternate screen, kursor, restore saat keluar. |
+| `caps.c/h` | Deteksi kemampuan: mode warna, Unicode, ukuran, interaktif/TTY. |
+| `style.c/h` | Token warna semantik → escape ANSI sesuai mode. |
+| `render.c/h` | Frame buffer grid; semua gambar ditulis ke buffer lalu dikirim **satu write per frame**. |
+| `widgets.c/h` | Panel, tabel/menu ter-highlight, bar HP/EXP, footer hint, kotak pesan/log. |
+| `ui.c/h` | API publik yang dipakai layar game. |
+
+Setiap layar di-redraw penuh: layar dibersihkan di grid, frame baru digambar,
+lalu menunggu input. Tidak ada lagi output yang menumpuk ke bawah.
+
+## Geometri dan layout
+
+| Aturan | Nilai |
+|---|---|
+| Lebar konten | 78 kolom (`UI_COLS`), dipusatkan horizontal bila terminal lebih lebar |
+| Tinggi konten | 24 baris (`UI_ROWS`) |
+| Ukuran minimum | 80x24; bila lebih kecil tampil "Perbesar terminal (min 80x24)" |
+| Baris judul | "Gacha Quest" kiri, nama layar kanan (aksen) |
+| Panel status pemain | nama, level, bar HP, gold, potion — di hub/battle/gacha/inventory/shop/status |
+| Panel pesan sistem | 1-5 baris terakhir menggantikan printf di tengah layar |
+| Footer | petunjuk tombol: "↑↓ pilih  Enter konfirmasi  Esc kembali" |
+| Bar HP/EXP | `█` terisi, `░` kosong (ASCII: `#` dan `-`) |
+
+## Deteksi kemampuan (deteksi, bukan tebak)
+
+### Warna
+
+| Kondisi | Mode |
+|---|---|
+| Bukan TTY, atau `NO_COLOR` ada, atau `TERM=dumb` | mono (tanpa ANSI) |
+| `COLORTERM` mengandung `truecolor`/`24bit` | truecolor `\x1b[38;2;R;G;Bm` |
+| `TERM` mengandung `256color` | 256 warna `\x1b[38;5;Nm` (kubus 6x6x6 + grayscale) |
+| Selain itu | 16 warna ANSI (RGB → warna terdekat) |
+| Windows 10+ | `ENABLE_VIRTUAL_TERMINAL_PROCESSING`; gagal → mono |
+
+### Karakter (glyph)
+
+| Kondisi | Hasil |
+|---|---|
+| locale (`LC_ALL`/`LC_CTYPE`/`LANG`) mengandung `UTF-8`/`utf8` dan `TERM` ≠ `linux`/`dumb` | Unicode: `┌ ┐ └ ┘ ─ │ ├ ┤ █ ░` |
+| Selain itu | ASCII: `+ - | #` |
+| Windows + konsol VT | `SetConsoleOutputCP(CP_UTF8)`, default Unicode |
+
+Unicode hanya memakai garis tipis + blok; tanpa emoji, sudut rounded, atau
+karakter lebar-ganda (CJK) agar perataan kolom tidak rusak. Semua karakter
+diambil dari tabel `Glyphs` (varian unicode & ascii), tidak ada border
+hardcode di layar.
+
+### Override lewat environment
+
+| Env | Efek |
+|---|---|
+| `GACHA_COLOR=mono\|16\|256\|truecolor` | paksa mode warna |
+| `GACHA_ASCII=1` | paksa ASCII |
+| `GACHA_UNICODE=1` | paksa Unicode |
+| `GACHA_TTY=1` | hook uji: anggap stdout terminal (tanpa TTY nyata) |
+
+### Input
+
+- POSIX raw mode (`tcgetattr`/`tcsetattr`, ICANON & ECHO mati, VMIN=1).
+  Windows: `SetConsoleMode` + `_getch` (prefix 0xE0).
+- Tombol: panah atas/bawah (`ESC [ A/B`, juga `ESC O A/B`), `W`/`S`, `K`/`J`,
+  Enter, angka 0-9 sebagai shortcut item menu, `Esc`/`Q` kembali.
+- ESC tunggal dibedakan dari urutan panah dengan timeout singkat (poll ~40 ms).
+- Menu: item terpilih di-highlight (warna latar + penanda `▸ `/`> `), wrap-around.
+- Layar yang butuh teks (nama, seed, cari item, jumlah potion) sementara balik
+  ke mode cooked (baris) lalu raw lagi; validasi lama dipertahankan.
+- Restore terminal dijamin: `atexit()` + handler `SIGINT`/`SIGTERM`/`SIGHUP`/
+  `SIGTSTP`/`SIGCONT` (POSIX). Setelah keluar/crash: kursor tampil, echo hidup,
+  keluar alternate screen, warna reset.
+
+### Mode non-interaktif (fallback)
+
+Bila stdin atau stdout bukan TTY: tanpa raw mode, tanpa alternate screen, tanpa
+clear screen, tanpa warna, ASCII, dan input baris seperti versi lama (termasuk
+pesan EOF). Perilaku fallback identik dengan versi sebelumnya sehingga test lama
+tetap lulus.
+
+## Palet semantik
+
+Token, bukan warna per layar (`style.h`). Nilai RGB awal:
+
+| Token | Warna |
+|---|---|
+| accent | #5FB3FF |
+| border | #4A5568 |
+| text | #E2E8F0 |
+| dim | #718096 |
+| hp_good / success | #48BB78 |
+| hp_mid | #ECC94B |
+| hp_low / danger | #F56565 |
+| gold | #F6C453 |
+| rarity common | #A0AEC0 |
+| rarity rare | #4299E1 |
+| rarity epic | #ECC94B |
+| rarity legendary | #D53F8C |
+| selected_bg | #2D3748 (teks accent) |
+
+Bar HP: truecolor mewarnai tiap sel dengan gradien halus; 256/16 memakai satu
+warna per ambang (hijau >60%, kuning 31-60%, merah ≤30%); mono terbaca dari
+karakter `█`/`░` saja. Info penting selalu disertai teks/simbol (mis. tag
+`[Epic]`), bukan warna saja, agar tetap terbaca di mode mono.
+
+## Tangkapan layar (ASCII, ANSI-stripped)
+
+Contoh frame showcase widget (panel, bar HP tiga ambang, menu ter-highlight):
+
+```
+Gacha Quest                                                          Preview
++Panel-----------------------------------------------------------------------+
+| text         title        accent       border       dim          gold      |
+| danger       success      common       rare         epic         legendary |
+|                                                                            |
+|  ###########-------      ########----------      ##----------------        |
+|                                                                            |
+|  ###########-----------------          ###################---------        |
++----------------------------------------------------------------------------+
+  > 1. Pilihan dua
+    2. Pilihan tiga
+```
+
+## Kode ANSI (legacy)
+
+Teks pesan per layar di bawah ini tetap sama persis; tata letaknya kini memakai
+panel/bar berwarna di atas. Nilai ANSI lama (`ANSI_CYAN`, `ANSI_RED`, dst.)
+masih tersedia di `ui.h` untuk kompatibilitas tetapi layar baru memakai token
+`Style`.
+
+---
+
+
+## 1. Menu Utama
+
+```
+           GACHA QUEST
+ 1. Game Baru
+ 2. Lanjutkan
+ 3. Leaderboard
+ 0. Keluar
+Pilih:
+```
+
+Pesan sistem (jika ada) dicetak tepat di atas `Pilih:`, contoh:
+
+```
+Skor farras (0) dicatat ke leaderboard. Kembali ke menu utama.
+Pilih:
+```
+
+## 2. Game Baru — input nama & seed
+
+```
+Pilih: Masukkan nama pemain: Seed dunia (Enter saja untuk acak): Seed acak dipilih: 1794728246
+```
+
+Seed dikosongkan -> `Seed acak dipilih: <angka>`. Seed diisi angka -> dipakai apa adanya.
+Seed tidak valid -> `Seed harus angka bulat 0 sampai 4294967295.`
+
+Pesan sambutan:
+
+```
+Selamat datang, farras! Kamu dapat 200 gold.
+```
+
+## 3. Lanjutkan — muat progres
+
+Berhasil:
+
+```
+Selamat datang kembali, farras!
+```
+
+Gagal:
+
+```
+Gagal memuat: data/save.txt tidak ada.
+Gagal memuat: format data/save.txt rusak.
+Gagal memuat: jumlah item tidak valid.
+Gagal memuat: daftar item tidak lengkap.
+Gagal memuat: item ID %d tidak ada di katalog.
+Gagal memuat: nilai di luar rentang.
+```
+
+## 4. Leaderboard
+
+```
+=== Leaderboard (Top 5) ===
+1. P12             level  1 skor 120
+2. P11             level  1 skor 110
+3. P10             level  1 skor 100
+4. UjiWn           level  2 skor 92
+5. P9              level  1 skor 90
+```
+
+Kosong:
+
+```
+=== Leaderboard (Top 5) ===
+Belum ada data leaderboard.
+```
+
+## 5. Hub — menu utama game
+
+```
++HUB---------------------------------------------+
+| Pemain : farras                                |
+| Level  : 1 (Skor 0)                            |
+| HP [##########] 100/100                        |
+| Gold   : 200   Potion: 2                       |
++------------------------------------------------+
+ 1. Battle
+ 2. Gacha
+ 3. Inventory
+ 4. Shop
+ 5. Dungeon
+ 6. Status
+ 7. Simpan
+ 0. Kembali ke menu utama
+Pilih:
+```
+
+Baris HP memakai bar 10 sel: `#` terisi, `-` kosong. Warna bar ikut persentase HP
+(hijau > 60%, kuning 31-60%, merah <= 30%).
+
+## 6. Battle
+
+```
++BATTLE------------------------------------------+
+| Pemain : farras                                |
+| Level  : 1 (Skor 0)                            |
+| HP [##########] 100/100                        |
+| Gold   : 200   Potion: 2                       |
++------------------------------------------------+
++Slime-------------------------------------------+
+| HP musuh: 30                                   |
+| ATK 6 | DEF 0                                  |
++------------------------------------------------+
+
+ 1. Serang
+ 2. Bertahan
+ 3. Potion
+ 4. Kabur
+Aksi:
+```
+
+### 6.1 Hasil aksi
+
+```
+farras menyerang Slime: 11 damage
+Slime menyerang farras: 6 damage
+```
+
+```
+Kamu bertahan.
+Slime menyerang: 3 damage
+Karena bertahan, damage masuk hanya 1.
+```
+
+```
+Potion dipakai, HP sekarang 100/100.
+Slime menyerang farras: 4 damage
+```
+
+```
+Kabur berhasil! Battle selesai tanpa hadiah.
+```
+
+```
+Kabur gagal!
+Slime menyerang farras: 5 damage
+```
+
+Potion habis:
+
+```
+Potion habis! (giliran tidak terpakai)
+```
+
+### 6.2 Menang
+
+```
+Slime kalah! Kamu menang!
+Hadiah: +10 EXP, +15 gold, +10 skor.
+```
+
+### 6.3 Kalah
+
+```
+Kamu dikalahkan oleh Slime...
+Gold tinggal 107, HP dipulihkan penuh. Kembali ke hub.
+```
+
+Naik level (pesan di hub):
+
+```
+Naik level! Sekarang level 2 (maxHp 120, ATK 13, DEF 5).
+```
+
+## 7. Gacha
+
+```
++GACHA-------------------------------------------+
+| Pemain : farras                                |
+| Level  : 1 (Skor 0)                            |
+| HP [##########] 100/100                        |
+| Gold   : 200   Potion: 2                       |
++------------------------------------------------+
++PULL--------------------------------------------+
+| Pity    : 0/10                                 |
+| Total pull: 0                                  |
++------------------------------------------------+
+ 1. Pull 1x (100 gold)
+ 2. Pull 10x (900 gold)
+ 0. Kembali
+Pilih:
+```
+
+Hasil pull (1x):
+
+```
+  [Rare] Storm Hammer (power 22) -> baru!
+```
+
+Hasil pull 10x:
+
+```
+Hasil pull 10x:
+  [Common] Scale Cuirass (power 8) -> baru!
+  [Epic] Flame Blade (power 30) -> baru!
+```
+
+Duplikat (dijual jadi gold):
+
+```
+  [Common] Wooden Sword -> DUPLIKAT, jadi +20 gold
+```
+
+Gold kurang:
+
+```
+Gold kurang! Pull 1x butuh 100 gold.
+Gold kurang! Pull 10x butuh 900 gold.
+```
+
+## 8. Inventory
+
+```
++INVENTORY---------------------------------------+
+| Pemain : farras                                |
+| Level  : 1 (Skor 0)                            |
+| HP [##########] 100/100                        |
+| Gold   : 0   Potion: 2                         |
++------------------------------------------------+
+Inventory (2/36)
+Idx  Nama                 Tipe Rarity     Power Terpasang
+0    Storm Hammer         S    Rare       22
+1    Scale Cuirass        A    Common     8
+ 1. Urutkan
+ 2. Cari item
+ 3. Equip item
+ 0. Kembali
+Pilih:
+```
+
+Urutkan:
+
+```
+Urutkan berdasarkan (1 rarity, 2 power, 3 nama):
+```
+
+```
+Inventory terurut.
+```
+
+Cari item:
+
+```
+Cari nama item:
+```
+
+```
+Ditemukan: idx 0 Storm Hammer (tipe S, power 22)
+```
+
+```
+Tidak ada item yang cocok.
+```
+
+Equip:
+
+```
+Nomor indeks item yangpasang (999 batal):
+```
+
+```
+Iron Dagger dipasang.
+```
+
+```
+Inventory kosong.
+Indeks tidak ada di inventory.
+```
+
+## 9. Shop
+
+```
++SHOP--------------------------------------------+
+| Pemain : farras                                |
+| Level  : 1 (Skor 0)                            |
+| HP [##########] 100/100                        |
+| Gold   : 200   Potion: 2                       |
++------------------------------------------------+
+ 1. Beli potion (40 gold)
+ 2. Jual item
+ 0. Kembali
+Pilih:
+```
+
+Beli potion:
+
+```
+Jumlah potion yang dibeli (1-5):
+```
+
+```
+Beli 2 potion. Gold: 120, Potion: 4.
+```
+
+```
+Stok potion sudah penuh (maks 20).
+Gold tidak cukup untuk membeli potion.
+```
+
+Jual item:
+
+```
+Idx  Nama                 Rarity     Power Harga jual
+0    Wooden Sword         Common     3     20
+1    Iron Dagger          Common     5     20
+Nomor indeks item yang dijual (999 batal):
+```
+
+```
+Terjual: Wooden Sword +20 gold.
+```
+
+```
+Inventory kosong, tidak ada yang bisa dijual.
+Item sedang terpasang, tidak bisa dijual.
+Indeks tidak ada di inventory.
+```
+
+## 10. Status
+
+```
++STATUS------------------------------------------+
+| Pemain : farras                                |
+| Level  : 1 (Skor 0)                            |
+| HP [##########] 100/100                        |
+| Gold   : 200   Potion: 2                       |
++------------------------------------------------+
++DETAIL------------------------------------------+
+| Level      : 1 (EXP 0/50)                      |
+| ATK        : 10                                |
+| DEF        : 3                                 |
+| Potion     : 2                                 |
+| Pity       : 0/10                              |
+| Total pull : 0                                 |
+| Seed dunia : 1794728246                        |
+| Item       : 0/36                              |
++------------------------------------------------+
+```
+
+Baris senjata & armor terpasang (di bawah box):
+
+```
+Senjata: Storm Hammer (power 22)
+Armor  : Scale Cuirass (power 8)
+```
+
+## 11. Dungeon
+
+Intro:
+
+```
+Dunia dungeon dibangun dari seed 12345. Masukkan seed ini lagi kapan saja untuk peta yang persis sama.
+Jalan ke segala arah. Kumpulkan treasure ($), lalu tekan Q kalau sudah puas.
+Tekan Enter untuk masuk:
+```
+
+Peta (25x15, `P` = pemain, `$` = treasure, `*` = jalur hint BFS, `#` = tembok):
+
+```
+.#####.#####.#####.#####.
+.#####.#####.#####.#####.
+.#####.#####.#####.#####.
+.........................
+.#####.#####.#####.#####.
+.#####.#####.#####.#####.
+.#####.#####.#####.#####.
+............P............
+.#####.#####.#####.#####.
+.#####.#####.#####.#####.
+.#####.#####.#####.#####.
+.........................
+.#####.#####.#####.#####.
+.#####.#####.#####.#####.
+.#####.#####.#####.#####.
+Posisi dunia (1,1) | langkah 0 | HP 100/100 | gold 200 | seed 12345
+Area awal tersambung dari titik awal sampai ujung koridor (DFS).
+Gerak (W/A/S/D, H hint 30 gold, Q keluar):
+```
+
+Pesan runtime:
+
+```
+Posisi (2,1), langkah 1.
+Tembok! Tidak bisa lewat.
+Treasure! +30 gold. Sudah 1 treasure di run ini.
+Treasure terdekat 12 langkah dari sini. Sisa hint 2.
+Di sekitar sini tidak ada treasure.
+Hint sudah habis (maks 3 kali).
+Gold kurang, hint butuh 30 gold.
+Masukkan satu huruf: W/A/S/D, H, atau Q.
+Gerakan tidak dikenal.
+```
+
+Keluar dungeon:
+
+```
+Keluar dungeon. Langkah total: 1.
+```
+
+## 12. Simpan & Keluar
+
+Simpan (hub menu 7):
+
+```
+Progres tersimpan di data/save.txt.
+```
+
+Keluar dari hub:
+
+```
+Simpan sebelum keluar? (y/n):
+```
+
+Kembali ke menu utama (skor ikut dicatat):
+
+```
+Skor farras (0) dicatat ke leaderboard. Kembali ke menu utama.
+```
+
+Keluar dari game:
+
+```
+Terima kasih sudah bermain Gacha Quest!
+```
+
+## 13. Validasi input (semua layar)
+
+```
+Input tidak valid, masukkan angka 0 sampai 7.
+Angka harus 1 sampai 4.
+Input berakhir (EOF), memakai nilai 0.
+Input tidak boleh kosong.
+Input berakhir (EOF).
+```
+
+---
+
+## Peta layar -> file sumber
+
+| Layar | File |
+|---|---|
+| Menu utama, Game Baru, Lanjutkan | `main.c` |
+| Box/header/HP bar | `src/ui/ui.c` |
+| Hub | `main.c` (`hubMenu`) |
+| Battle | `src/battle/battle.c` |
+| Gacha | `src/gacha/gacha.c` |
+| Inventory | `src/inventory/inventory.c` |
+| Shop | `src/shop/shop.c` |
+| Status | `src/player/player.c` (`showStatus`) |
+| Dungeon | `src/dungeon/dungeon.c` |
+| Simpan/muat, Leaderboard | `src/storage/storage.c` |
+
+---
+
+## Keputusan desain (ambiguitas → pilihan aman)
+
+1. **Fallback identik.** Saat non-TTY, semua layar memakai jalur lama (printf /
+   input baris, ASCII, tanpa clear/alternate screen). Ini menjaga test lama dan
+   pemakaian pipa tetap lulus.
+2. **Windows Unicode default.** Di konsol Windows dengan VT aktif, mode
+   interaktif + berwarna memaksa Unicode (`SetConsoleOutputCP(CP_UTF8)`) karena
+   konsol Windows mendukung UTF-8 walau `LANG` tidak diset. `GACHA_ASCII=1`
+   tetap bisa memaksa ASCII. Aturan `LANG` (C→ASCII, UTF-8→Unicode) berlaku penuh
+   di POSIX dan di Windows sebelum VT aktif.
+3. **Lebar tetap 78 kolom, dipusatkan.** Lebih aman untuk perataan tabel
+   (inventory/shop/leaderboard) daripada layout penuh selebar terminal.
+4. **q/ESC pada dungeon langsung keluar** (bukan prompt), sesuai perilaku lama
+   "Q keluar"; tidak menambah langkah konfirmasi.
+5. **Pesan EOF non-interaktif** dipertahankan persis ("Input berakhir (EOF)...").
+6. **Bar HP mono** mengandalkan `█`/`░`; ambang warna tidak dipakai agar tetap
+   konsisten terbaca tanpa warna.

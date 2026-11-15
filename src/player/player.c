@@ -3,6 +3,8 @@
 #include "config.h"
 #include "player.h"
 #include "util.h"
+#include "ui.h"
+#include "render.h"
 
 /* Fills a new player with the starting values from rule 6.1. */
 void initPlayer(Player *p, const char *name)
@@ -41,8 +43,8 @@ void addExp(Player *p, int exp)
         p->atk += 2;
         p->def += 1;
         p->hp = p->maxHp;
-        printf("Naik level! Sekarang level %d (maxHp %d, ATK %d, DEF %d).\n",
-               p->level, p->maxHp, p->atk, p->def);
+        set_message("Naik level! Sekarang level %d (maxHp %d, ATK %d, DEF %d).",
+                    p->level, p->maxHp, p->atk, p->def);
     }
     if (p->level >= MAX_LEVEL) p->exp = 0;
 }
@@ -61,30 +63,51 @@ int totalDef(const Player *p)
     return p->def;
 }
 
-/* Shows the full player status. */
+/* Shows the full player status: statistics and equipment side by side. */
 void showStatus(const Player *p)
 {
-    printf("=== Status ===\n");
-    printf("Nama       : %s\n", p->name);
-    printf("Level      : %d (EXP %d/%d)\n",
-           p->level, p->exp, p->level >= MAX_LEVEL ? 0 : p->level * 50);
-    printf("HP         : %d/%d\n", p->hp, p->maxHp);
-    printf("ATK        : %d", totalAtk(p));
-    if (p->weaponIndex >= 0)
-        printf(" (%d + %d %s)", p->atk, p->inventory[p->weaponIndex].power, p->inventory[p->weaponIndex].name);
-    printf("\n");
-    printf("DEF        : %d", totalDef(p));
-    if (p->armorIndex >= 0)
-        printf(" (%d + %d %s)", p->def, p->inventory[p->armorIndex].power, p->inventory[p->armorIndex].name);
-    printf("\n");
-    printf("Gold       : %d\n", p->gold);
-    printf("Potion     : %d\n", p->potion);
-    printf("Pity       : %d/%d\n", p->pity, PITY_THRESHOLD);
-    printf("Total pull : %d\n", p->totalPull);
-    printf("Skor       : %d\n", p->score);
-    printf("Seed dunia : %u\n", p->seed);
-    printf("Item       : %d/%d", p->itemCount, MAX_ITEM);
-    if (p->weaponIndex >= 0) printf(" | Senjata: %s", p->inventory[p->weaponIndex].name);
-    if (p->armorIndex >= 0) printf(" | Armor: %s", p->inventory[p->armorIndex].name);
-    printf("\n");
+    char buf[64];
+    int expMax = p->level >= MAX_LEVEL ? 0 : p->level * 50;
+
+    ui_frame("Status");
+    ui_status_panel_at(p, 2, 0, UI_COLS);
+
+    ui_panel(9, 0, 38, 11, "STATISTIK");
+    snprintf(buf, sizeof buf, "Level      : %d (EXP %d/%d)", p->level, p->exp, expMax);
+    render_text(10, 2, ST_TEXT, "%s", buf);
+    ui_bar(11, 2, 32, p->exp, expMax > 0 ? expMax : 1, ST_ACCENT);
+    snprintf(buf, sizeof buf, "ATK        : %d", totalAtk(p));
+    render_text(12, 2, ST_TEXT, "%s", buf);
+    snprintf(buf, sizeof buf, "DEF        : %d", totalDef(p));
+    render_text(13, 2, ST_TEXT, "%s", buf);
+    snprintf(buf, sizeof buf, "Potion     : %d", p->potion);
+    render_text(14, 2, ST_TEXT, "%s", buf);
+    snprintf(buf, sizeof buf, "Pity       : %d/%d", p->pity, PITY_THRESHOLD);
+    render_text(15, 2, ST_TEXT, "%s", buf);
+    snprintf(buf, sizeof buf, "Total pull : %d", p->totalPull);
+    render_text(16, 2, ST_TEXT, "%s", buf);
+    snprintf(buf, sizeof buf, "Seed dunia : %u", p->seed);
+    render_text(17, 2, ST_TEXT, "%s", buf);
+    snprintf(buf, sizeof buf, "Item       : %d/%d", p->itemCount, MAX_ITEM);
+    render_text(18, 2, ST_TEXT, "%s", buf);
+
+    ui_panel(9, 40, 38, 11, "PERLENGKAPAN");
+    if (p->weaponIndex >= 0) {
+        const Item *w = &p->inventory[p->weaponIndex];
+        snprintf(buf, sizeof buf, "Senjata: %s (power %d)", w->name, w->power);
+        render_text(12, 42, style_rarity(w->rarity), "%s", buf);
+    } else {
+        render_text(12, 42, ST_DIM, "Senjata: -");
+    }
+    if (p->armorIndex >= 0) {
+        const Item *a = &p->inventory[p->armorIndex];
+        snprintf(buf, sizeof buf, "Armor  : %s (power %d)", a->name, a->power);
+        render_text(16, 42, style_rarity(a->rarity), "%s", buf);
+    } else {
+        render_text(16, 42, ST_DIM, "Armor  : -");
+    }
+
+    ui_footer(NULL);
+    ui_flush();
+    ui_wait_enter("Tekan Enter untuk lanjut...");
 }

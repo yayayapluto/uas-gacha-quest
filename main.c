@@ -11,34 +11,56 @@
 #include "shop.h"
 #include "storage.h"
 #include "dungeon.h"
+#include "ui.h"
+#include "render.h"
+#include "caps.h"
 
 /* Shows the main menu and returns the player choice. */
+static void mainMenuDraw(void *ctx, int sel)
+{
+    static const char *items[] = { "Game Baru", "Lanjutkan", "Leaderboard", "Keluar" };
+    static const int nums[] = { 1, 2, 3, 0 };
+    const Glyphs *g = caps_glyphs();
+    int i;
+    (void)ctx;
+
+    ui_frame("Menu Utama");
+    render_text(2, 0, ST_TITLE, "G A C H A   Q U E S T");
+    for (i = 0; i < 22; i++)
+        render_text(3, i, ST_BORDER, "%s", g->hz);
+    ui_menu_v(5, 2, items, nums, 4, sel);
+    ui_message(20);
+}
+
 int mainMenu(void)
 {
-    printLine();
-    printf("       GACHA QUEST\n");
-    printf(" 1. Game Baru\n");
-    printf(" 2. Lanjutkan\n");
-    printf(" 3. Leaderboard\n");
-    printf(" 0. Keluar\n");
-    return readInt("Pilih: ", 0, 3);
+    static const char *items[] = { "Game Baru", "Lanjutkan", "Leaderboard", "Keluar" };
+    static const int nums[] = { 1, 2, 3, 0 };
+    int choice = ui_menu_pick(items, nums, 4, 0, 3, mainMenuDraw, NULL);
+    set_message("");
+    return choice;
+}
+
+static void hubMenuDraw(void *ctx, int sel)
+{
+    static const char *items[] = { "Battle", "Gacha", "Inventory", "Shop", "Dungeon",
+                                   "Status", "Simpan", "Kembali ke menu utama" };
+    static const int nums[] = { 1, 2, 3, 4, 5, 6, 7, 0 };
+    const Player *p = ctx;
+
+    ui_frame("Hub");
+    ui_status_panel_at(p, 2, 0, UI_COLS);
+    ui_menu_v(9, 2, items, nums, 8, sel);
+    ui_message(20);
 }
 
 /* Shows the game hub and returns the player choice. */
 int hubMenu(const Player *p)
 {
-    printLine();
-    printf("--- Hub | %s | Lv %d | HP %d/%d | Gold %d | Skor %d ---\n",
-           p->name, p->level, p->hp, p->maxHp, p->gold, p->score);
-    printf(" 1. Battle\n");
-    printf(" 2. Gacha\n");
-    printf(" 3. Inventory\n");
-    printf(" 4. Shop\n");
-    printf(" 5. Dungeon\n");
-    printf(" 6. Status\n");
-    printf(" 7. Simpan\n");
-    printf(" 0. Kembali ke menu utama\n");
-    return readInt("Pilih: ", 0, 7);
+    static const char *items[] = { "Battle", "Gacha", "Inventory", "Shop", "Dungeon",
+                                   "Status", "Simpan", "Kembali ke menu utama" };
+    static const int nums[] = { 1, 2, 3, 4, 5, 6, 7, 0 };
+    return ui_menu_pick(items, nums, 8, 0, 7, hubMenuDraw, (void *)p);
 }
 
 /* Hub loop: every feature is reachable from here. */
@@ -63,7 +85,11 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
                 if (answer[0] == 'y' || answer[0] == 'Y') saveGame(p);
             }
             recordScore(p);
-            printf("Kembali ke menu utama.\n");
+            if (last_message()[0] != '\0')
+                set_message("%s Kembali ke menu utama.", last_message());
+            else
+                set_message("Kembali ke menu utama.");
+            ui_wait_enter("Tekan Enter untuk lanjut...");
             return;
         }
         }
@@ -80,6 +106,7 @@ int main(void)
     int running = 1;
 
     srand((unsigned)time(NULL));
+    ui_init();
     catalogCount = loadCatalog("data/item.txt", catalog);
     monsterCount = loadMonsters("data/monster.txt", monsters);
     if (catalogCount == 0 || monsterCount == 0) {
@@ -95,7 +122,7 @@ int main(void)
             char name[MAX_NAME];
             readString("Masukkan nama pemain: ", name, MAX_NAME);
             initPlayer(&player, name);
-            printf("Selamat datang, %s! Kamu dapat 200 gold.\n", player.name);
+            set_message("Selamat datang, %s! Kamu dapat 200 gold.", player.name);
             player.seed = promptWorldSeed();
             runHub(&player, catalog, catalogCount, monsters, monsterCount);
             break;
@@ -103,10 +130,13 @@ int main(void)
         case 2:
             if (loadGame(&player, catalog, catalogCount)) {
                 runHub(&player, catalog, catalogCount, monsters, monsterCount);
+            } else {
+                ui_wait_enter("Tekan Enter untuk lanjut...");
             }
             break;
         case 3:
             showLeaderboard();
+            ui_wait_enter("Tekan Enter untuk lanjut...");
             break;
         case 0:
             shutdownGame();

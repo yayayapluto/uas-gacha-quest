@@ -4,8 +4,17 @@
 #include "battle.h"
 #include "util.h"
 #include "player.h"
+#include "ui.h"
+#include "render.h"
+#include "caps.h"
+#include "term.h"
 
-/* Damage formula: max(1, ATK - DEF) + rand() % 4. */
+typedef struct {
+    const Player *p;
+    const Monster *enemy;
+    int enemyHp;
+} BattleCtx;
+
 int calculateDamage(int atk, int def)
 {
     int base = atk - def;
@@ -13,7 +22,6 @@ int calculateDamage(int atk, int def)
     return base + rand() % 4;
 }
 
-/* Applies damage with a 10% critical chance (x2); returns the damage dealt. */
 int attack(const char *from, const char *to, int atk, int targetDef, int *targetHp, int *critical)
 {
     int dmg = calculateDamage(atk, targetDef);
@@ -23,11 +31,13 @@ int attack(const char *from, const char *to, int atk, int targetDef, int *target
         *critical = 1;
     }
     *targetHp -= dmg;
-    printf("%s menyerang %s: %d damage%s\n", from, to, dmg, *critical ? " (KRITIS!)" : "");
+    if (*critical)
+        ui_log_style(ST_DANGER, "%s menyerang %s: %d damage (KRITIS!)", from, to, dmg);
+    else
+        ui_log("%s menyerang %s: %d damage", from, to, dmg);
     return dmg;
 }
 
-/* Picks a random monster whose minLevel is at most the player level; returns its index. */
 int pickMonster(const Monster m[], int count, int playerLevel)
 {
     int candidates[MAX_MONSTER];
@@ -42,7 +52,33 @@ int pickMonster(const Monster m[], int count, int playerLevel)
     return candidates[rand() % candidateCount];
 }
 
-/* Runs the turn-based battle until the player wins, loses, or flees. */
+static void battleDraw(void *ctx, int sel)
+{
+    static const char *items[] = { "Serang", "Bertahan", "Potion", "Kabur" };
+    static const int nums[] = { 1, 2, 3, 4 };
+    BattleCtx *bc = ctx;
+    char buf[64];
+    int i, start, logRow;
+
+    ui_frame("Battle");
+    ui_status_panel_at(bc->p, 2, 0, UI_COLS);
+
+    ui_panel(9, 0, 40, 5, bc->enemy->name);
+    snprintf(buf, sizeof buf, "HP  %d/%d", bc->enemyHp, bc->enemy->hp);
+    render_text(10, 2, ST_TEXT, "%s", buf);
+    ui_hp_bar(11, 2, 32, bc->enemyHp, bc->enemy->hp);
+    snprintf(buf, sizeof buf, "ATK %d | DEF %d", bc->enemy->atk, bc->enemy->def);
+    render_text(12, 2, ST_TEXT, "%s", buf);
+
+    logRow = 16;
+    start = ui_log_count() > 4 ? ui_log_count() - 4 : 0;
+    for (i = start; i < ui_log_count(); i++)
+        render_text(logRow++, 0, ui_log_style_at(i), "%s", ui_log_text(i));
+
+    ui_menu_v(21, 2, items, nums, 4, sel);
+    ui_footer(NULL);
+}
+
 void startBattle(Player *p, const Monster m[], int count)
 {
     int monsterIndex = pickMonster(m, count, p->level);
@@ -50,34 +86,38 @@ void startBattle(Player *p, const Monster m[], int count)
     int enemyHp;
     int critical;
     int alive = 1;
+    BattleCtx bc;
 
     if (monsterIndex < 0) {
-        printf("Tidak ada monster yang tersedia.\n");
+        set_message("Tidak ada monster yang tersedia.");
         return;
     }
     enemy = m[monsterIndex];
     enemyHp = enemy.hp;
-    printf("Monster muncul: %s (HP %d, ATK %d, DEF %d)\n", enemy.name, enemy.hp, enemy.atk, enemy.def);
+    bc.p = p;
+    bc.enemy = &enemy;
+    bc.enemyHp = enemyHp;
+
+    ui_log_clear();
 
     while (alive) {
         int action;
-        printf("--- Battle vs %s ---\n", enemy.name);
-        printf("HP kamu: %d/%d (ATK %d, DEF %d, potion %d) | HP %s: %d\n",
-               p->hp, p->maxHp, totalAtk(p), totalDef(p), p->potion, enemy.name, enemyHp);
-        printf("1. Serang\n2. Bertahan\n3. Potion\n4. Kabur\n");
-        action = readInt("Aksi: ", 1, 4);
+        static const char *items[] = { "Serang", "Bertahan", "Potion", "Kabur" };
+        static const int nums[] = { 1, 2, 3, 4 };
+
+        bc.enemyHp = enemyHp;
+        action = ui_menu_pick(items, nums, 4, 1, 4, battleDraw, &bc);
         if (feof(stdin)) {
-            printf("Battle dihentikan (input berakhir).\n");
-            alive = 0;
+            set_message("Battle dihentikan (input berakhir).");
             break;
         }
 
         switch (action) {
-        case 1: {
+        case 1:
             attack(p->name, enemy.name, totalAtk(p), enemy.def, &enemyHp, &critical);
             if (enemyHp <= 0) {
-                printf("%s kalah! Kamu menang!\n", enemy.name);
-                printf("Hadiah: +%d EXP, +%d gold, +%d skor.\n", enemy.exp, enemy.gold, enemy.exp);
+                ui_log_style(ST_SUCCESS, "%s kalah! Kamu menang!", enemy.name);
+                ui_log("Hadiah: +%d EXP, +%d gold, +%d skor.", enemy.exp, enemy.gold, enemy.exp);
                 addExp(p, enemy.exp);
                 p->gold += enemy.gold;
                 p->score += enemy.exp;
@@ -86,51 +126,57 @@ void startBattle(Player *p, const Monster m[], int count)
             }
             attack(enemy.name, p->name, enemy.atk, totalDef(p), &p->hp, &critical);
             break;
-        }
         case 2: {
             int dmg;
-            printf("Kamu bertahan.\n");
+            ui_log("Kamu bertahan.");
             dmg = calculateDamage(enemy.atk, totalDef(p));
             if (rand() % 100 < 10) {
                 dmg *= 2;
-                printf("%s menyerang: %d damage (KRITIS!)\n", enemy.name, dmg);
+                ui_log_style(ST_DANGER, "%s menyerang: %d damage (KRITIS!)", enemy.name, dmg);
             } else {
-                printf("%s menyerang: %d damage\n", enemy.name, dmg);
+                ui_log("%s menyerang: %d damage", enemy.name, dmg);
             }
             dmg /= 2;
             if (dmg < 1) dmg = 1;
             p->hp -= dmg;
-            printf("Karena bertahan, damage masuk hanya %d.\n", dmg);
+            ui_log("Karena bertahan, damage masuk hanya %d.", dmg);
             break;
         }
         case 3:
             if (p->potion <= 0) {
-                printf("Potion habis! (giliran tidak terpakai)\n");
+                ui_log("Potion habis! (giliran tidak terpakai)");
                 break;
             }
             p->potion--;
             p->hp += 50;
             if (p->hp > p->maxHp) p->hp = p->maxHp;
-            printf("Potion dipakai, HP sekarang %d/%d.\n", p->hp, p->maxHp);
+            ui_log("Potion dipakai, HP sekarang %d/%d.", p->hp, p->maxHp);
             attack(enemy.name, p->name, enemy.atk, totalDef(p), &p->hp, &critical);
             break;
         case 4:
             if (rand() % 2 == 0) {
-                printf("Kabur berhasil! Battle selesai tanpa hadiah.\n");
+                ui_log("Kabur berhasil! Battle selesai tanpa hadiah.");
                 alive = 0;
             } else {
-                printf("Kabur gagal!\n");
+                ui_log("Kabur gagal!");
                 attack(enemy.name, p->name, enemy.atk, totalDef(p), &p->hp, &critical);
             }
             break;
         }
 
         if (p->hp <= 0) {
-            printf("Kamu dikalahkan oleh %s...\n", enemy.name);
+            ui_log_style(ST_DANGER, "Kamu dikalahkan oleh %s...", enemy.name);
             p->gold /= 2;
             p->hp = p->maxHp;
-            printf("Gold tinggal %d, HP dipulihkan penuh. Kembali ke hub.\n", p->gold);
+            ui_log("Gold tinggal %d, HP dipulihkan penuh. Kembali ke hub.", p->gold);
             alive = 0;
         }
+        if (alive) {
+            bc.enemyHp = enemyHp;
+            battleDraw(&bc, -1);
+            ui_wait_enter("Tekan Enter untuk lanjut...");
+        }
     }
+    ui_wait_enter("Tekan Enter untuk lanjut...");
+    set_message("");
 }

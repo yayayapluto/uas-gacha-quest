@@ -7,7 +7,11 @@
 #include "config.h"
 #include "dungeon.h"
 #include "util.h"
+#include "ui.h"
 #include "player.h"
+#include "caps.h"
+#include "term.h"
+#include "render.h"
 
 #define VIEW_WIDTH 25
 #define VIEW_HEIGHT 15
@@ -235,27 +239,60 @@ static void renderDungeon(char area[][AREA_MAX], const DungeonState *st,
     int ay = st->posY - st->originY;
     int tx, ty;
 
-    printf("\033[H");
+    if (!caps_interactive()) {
+        clear_screen();
+        for (ty = 0; ty < VIEW_HEIGHT; ty++) {
+            for (tx = 0; tx < VIEW_WIDTH; tx++) {
+                int r = ay - VIEW_HEIGHT / 2 + ty;
+                int c = ax - VIEW_WIDTH / 2 + tx;
+                char cell;
+                if (ty == VIEW_HEIGHT / 2 && tx == VIEW_WIDTH / 2) printf("P");
+                else if (trail[r][c] == '*') printf("*");
+                else {
+                    cell = area[r][c];
+                    if (cell == 'T') printf("$");
+                    else printf("%c", cell);
+                }
+            }
+            printf("\n");
+        }
+        printf("Posisi dunia (%d,%d) | langkah %d | HP %s%d/%d%s | gold %d | seed %u\n",
+               st->posX, st->posY, steps,
+               hp_color(p->hp, p->maxHp), p->hp, p->maxHp, ANSI_RESET,
+               p->gold, st->seed);
+        printf("%s\n", message);
+        printf("Gerak (W/A/S/D, H hint %d gold, Q keluar): ", HINT_COST);
+        fflush(stdout);
+        return;
+    }
+
+    ui_frame("Dungeon");
     for (ty = 0; ty < VIEW_HEIGHT; ty++) {
         for (tx = 0; tx < VIEW_WIDTH; tx++) {
             int r = ay - VIEW_HEIGHT / 2 + ty;
             int c = ax - VIEW_WIDTH / 2 + tx;
             char cell;
-            if (ty == VIEW_HEIGHT / 2 && tx == VIEW_WIDTH / 2) printf("P");
-            else if (trail[r][c] == '*') printf("*");
+            int srow = 2 + ty, scol = 2 + tx;
+            if (ty == VIEW_HEIGHT / 2 && tx == VIEW_WIDTH / 2)
+                render_text(srow, scol, ST_TITLE, "P");
+            else if (trail[r][c] == '*')
+                render_text(srow, scol, ST_ACCENT, "*");
             else {
                 cell = area[r][c];
-                if (cell == 'T') printf("$");
-                else printf("%c", cell);
+                if (cell == 'T') render_text(srow, scol, ST_GOLD, "$");
+                else if (cell == '#') render_text(srow, scol, ST_DIM, "#");
+                else if (cell == '.') render_text(srow, scol, ST_DIM, ".");
+                else if (cell == ' ') render_text(srow, scol, ST_DIM, " ");
+                else render_text(srow, scol, ST_DIM, "%c", cell);
             }
         }
-        printf("\n");
     }
-    printf("Posisi dunia (%d,%d) | langkah %d | HP %d | gold %d | seed %u\n",
-           st->posX, st->posY, steps, p->hp, p->gold, st->seed);
-    printf("%s\n", message);
-    printf("Gerak (W/A/S/D, H hint %d gold, Q keluar): ", HINT_COST);
-    fflush(stdout);
+    render_text(18, 2, ST_TEXT, "Posisi dunia (%d,%d) | langkah %d | HP %d/%d | gold %d | seed %u",
+                st->posX, st->posY, steps, p->hp, p->maxHp, p->gold, st->seed);
+    render_text(19, 2, ST_DIM, "%s", message);
+    render_text(21, 2, ST_DIM, "Gerak (W/A/S/D, H hint %d gold, Q keluar)", HINT_COST);
+    ui_footer(NULL);
+    ui_flush();
 }
 
 /* Seed from the clock, used when the player leaves the seed prompt empty. */
@@ -316,14 +353,34 @@ void runDungeon(Player *p)
     buildArea(&st, area);
     memset(trail, ' ', sizeof trail);
 
-    printf("Dunia dungeon dibangun dari seed %u. Masukkan seed ini lagi kapan saja untuk peta yang persis sama.\n", st.seed);
-    printf("Jalan ke segala arah. Kumpulkan treasure ($), lalu tekan Q kalau sudah puas.\n");
-    printf("Tekan Enter untuk masuk: ");
-    if (!readLine(entry, sizeof entry)) {
-        printf("\n");
-        return;
+    if (caps_interactive()) {
+        ui_frame("Dungeon");
+        render_text(4, 2, ST_DIM,
+                    "Dunia dungeon dibangun dari seed %u. Masukkan seed ini lagi kapan saja untuk peta yang persis sama.", st.seed);
+        render_text(5, 2, ST_DIM,
+                    "Jalan ke segala arah. Kumpulkan treasure ($), lalu tekan Q kalau sudah puas.");
+        render_text(7, 2, ST_TEXT, "Tekan Enter untuk masuk:");
+        ui_footer(NULL);
+        ui_flush();
+        {
+            char ch;
+            TermKey k;
+            do { k = term_getkey(&ch); } while (k != KEY_ENTER && k != KEY_ESC && k != KEY_EOF);
+            if (k == KEY_EOF) return;
+        }
+    } else {
+        clear_screen();
+        printf("%s", ANSI_DIM);
+        printf("Dunia dungeon dibangun dari seed %u. Masukkan seed ini lagi kapan saja untuk peta yang persis sama.\n", st.seed);
+        printf("Jalan ke segala arah. Kumpulkan treasure ($), lalu tekan Q kalau sudah puas.\n");
+        printf("%s", ANSI_RESET);
+        printf("Tekan Enter untuk masuk: ");
+        if (!readLine(entry, sizeof entry)) {
+            printf("\n");
+            return;
+        }
+        printf("\033[?25l");
     }
-    printf("\033[2J\033[?25l");
 
     /* DFS sanity check on the starting area: start cell must reach the far corridor end. */
     from.row = st.posY - st.originY;
@@ -336,22 +393,38 @@ void runDungeon(Player *p)
         strcpy(message, "Area awal tidak tersambung.");
 
     while (!finished) {
+        char cmd;
         renderDungeon(area, &st, trail, message, steps, p);
-        if (!readLine(buf, sizeof buf)) break;
-        if (buf[0] == '\0' || buf[1] != '\0') {
-            strcpy(message, "Masukkan satu huruf: W/A/S/D, H, atau Q.");
-            continue;
+        if (caps_interactive()) {
+            char ch;
+            TermKey k = term_getkey(&ch);
+            if (k == KEY_EOF) break;
+            if (k == KEY_RESIZE || k == KEY_ENTER) continue;
+            if (k == KEY_UP) cmd = 'W';
+            else if (k == KEY_DOWN) cmd = 'S';
+            else if (k == KEY_LEFT) cmd = 'A';
+            else if (k == KEY_RIGHT) cmd = 'D';
+            else if (k == KEY_ESC) cmd = 'Q';
+            else if (k == KEY_CHAR) cmd = (char)toupper((unsigned char)ch);
+            else continue;
+        } else {
+            if (!readLine(buf, sizeof buf)) break;
+            if (buf[0] == '\0' || buf[1] != '\0') {
+                strcpy(message, "Masukkan satu huruf: W/A/S/D, H, atau Q.");
+                continue;
+            }
+            cmd = (char)toupper((unsigned char)buf[0]);
         }
-        switch (toupper((unsigned char)buf[0])) {
+        switch (cmd) {
         case 'W':
         case 'A':
         case 'S':
         case 'D': {
             int dRow = 0, dCol = 0;
-            if (toupper((unsigned char)buf[0]) == 'W') dRow = -1;
-            if (toupper((unsigned char)buf[0]) == 'S') dRow = 1;
-            if (toupper((unsigned char)buf[0]) == 'A') dCol = -1;
-            if (toupper((unsigned char)buf[0]) == 'D') dCol = 1;
+            if (cmd == 'W') dRow = -1;
+            if (cmd == 'S') dRow = 1;
+            if (cmd == 'A') dCol = -1;
+            if (cmd == 'D') dCol = 1;
             {
                 int wx = st.posX + dCol, wy = st.posY + dRow;
                 char cell = dungeonCell(st.seed, wx, wy);
@@ -406,8 +479,12 @@ void runDungeon(Player *p)
             }
             break;
         case 'Q':
-            printf("\033[?25h\033[0m");
-            printf("Keluar dungeon. Langkah total: %d.\n", steps);
+            if (!caps_interactive()) {
+                printf("\033[?25h");
+                clear_screen();
+            }
+            set_message("Keluar dungeon. Langkah total: %d.", steps);
+            ui_wait_enter("Tekan Enter untuk lanjut...");
             finished = 1;
             break;
         default:
@@ -415,5 +492,5 @@ void runDungeon(Player *p)
             break;
         }
     }
-    if (!finished) printf("\033[?25h\033[0m\n");
+    if (!finished && !caps_interactive()) printf("\033[?25h");
 }
