@@ -19,6 +19,7 @@ static HANDLE lockHandle = INVALID_HANDLE_VALUE;
 static int lockFd = -1;
 #endif
 static int previousRunning = 0;
+static int contentionFlag = 0;
 
 #ifdef _WIN32
 #define LOCK_MARK_OFFSET 0x7FFFFFF0u
@@ -63,6 +64,7 @@ int lock_acquire(void)
                     0, 1, 0, &ov)) {
         CloseHandle(lockHandle);
         lockHandle = INVALID_HANDLE_VALUE;
+        contentionFlag = 1;
         return 0;
     }
     SetFilePointer(lockHandle, 0, NULL, FILE_BEGIN);
@@ -83,6 +85,7 @@ int lock_acquire(void)
     lockFd = open("data/session.lock", O_RDWR | O_CREAT, 0644);
     if (lockFd < 0) return 0;
     if (flock(lockFd, LOCK_EX | LOCK_NB) != 0) {
+        contentionFlag = 1;
         close(lockFd);
         lockFd = -1;
         return 0;
@@ -96,6 +99,8 @@ int lock_acquire(void)
     return 1;
 #endif
 }
+
+int lock_is_contention(void) { return contentionFlag; }
 
 int lock_previous_running(void) { return previousRunning; }
 
