@@ -5,7 +5,8 @@
    lifetime. Content is "RUNNING pid=<pid> start=<epoch>" while playing and
    "CLEAN" after a graceful exit; a RUNNING status found at startup means the
    previous process crashed or was force-killed. */
-int lock_acquire(void);            /* 1 acquired, 0 another instance holds it */
+int lock_acquire(void);            /* 1 acquired, 0 failed */
+int lock_is_contention(void);      /* 1 = another instance holds it, 0 = file error */
 int lock_previous_running(void);   /* 1 when the pre-acquire status was RUNNING */
 void lock_mark_clean(void);        /* final step of a graceful exit */
 
