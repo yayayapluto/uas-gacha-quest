@@ -1020,6 +1020,18 @@ static void dungeonLoop(Player *p, DungeonState *st, char area[][AREA_MAX],
                                       cell, wx, wy, area, message);
                         /* the battle already drew its own screen, so the loop
                            must not paint over it until the player presses a key */
+                        if (cell == 'M' && battleRunEnded()) {
+                            /* the run is over: leave the dungeon instead of
+                               walking on after a game-over screen */
+                            battleClearRunEnded();
+                            autosave_publish(p, battleRunAborted() ? AS_SCREEN_MENU : AS_SCREEN_HUB,
+                                             NULL, 0, NULL, 0, 0, 1);
+                            strcpy(message, battleRunAborted()
+                                               ? "Run berakhir. Kembali ke menu utama."
+                                               : "Kamu kalah. Run direset dari awal.");
+                            finished = 1;
+                            break;
+                        }
                         if (cell == 'M') drewBattle = 1;
                     } else {
                         sprintf(message, "Posisi (%d,%d), langkah %d.", wx, wy, steps);

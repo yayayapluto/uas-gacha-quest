@@ -146,3 +146,12 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
     membuka sel yang sama, dan pass konektivitas menambal gate ke tengah serta
     menutup kantong lantai yang tak terjangkau. Hasilnya tetap deterministik per
     seed dan seluruh area pandang tetap tersambung.
+
+41. **Kalah berakhir di layar game over, bukan refill HP.** Memulihkan HP
+    otomatis menyembunyikan kekalahan dan membuat gold yang dibagi dua terasa
+    seperti hukuman tanpa pilihan. Sekarang HP dibiarkan 0, layar game over
+    langsung tampil tanpa Enter, dan pemain memilih: reset run (level, HP,
+    gold, potion, item kembali ke awal; nama dan seed tetap) atau kembali ke
+    menu utama. Kekalahan di dungeon ikut menghentikan run; tidak ada Enter di
+    antara giliran battle, dan flag `battleRunEnded`/`battleRunAborted`
+    menyampaikan hasil itu ke hub dan dungeon.

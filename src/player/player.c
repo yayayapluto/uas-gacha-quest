@@ -29,6 +29,17 @@ void initPlayer(Player *p, const char *name)
     p->armorIndex = -1;
 }
 
+void resetPlayer(Player *p)
+{
+    char name[MAX_NAME];
+    unsigned int seed = p->seed;
+
+    strncpy(name, p->name, sizeof name - 1);
+    name[sizeof name - 1] = '\0';
+    initPlayer(p, name);
+    p->seed = seed;
+}
+
 /* Adds EXP and resolves level-ups (possibly several at once). */
 void addExp(Player *p, int exp)
 {

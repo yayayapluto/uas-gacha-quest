@@ -128,6 +128,13 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
         int choice;
         char err[160];
         if (platform_shutdown_requested()) return;
+        if (battleRunAborted()) {
+            battleClearRunAbort();
+            recordScore(p);
+            autosave_publish(p, AS_SCREEN_MENU, NULL, 0, NULL, 0, 0, 1);
+            set_message("Run berakhir. Kembali ke menu utama.");
+            return;
+        }
         if (autosave_poll_error(err, (int)sizeof err))
             set_message("Autosave gagal: %s", err);
         choice = hubMenu(p);
@@ -230,7 +237,8 @@ int main(void)
         fflush(stdout);
         if (readLine(answer, sizeof answer) && (answer[0] == 'y' || answer[0] == 'Y')) {
             resumeSession(&snap, catalog, catalogCount, monsters, monsterCount);
-            return 0;
+            if (platform_shutdown_requested()) return 0;
+            /* the restored run ended, so fall through to the main menu */
         }
     }
 

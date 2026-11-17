@@ -380,8 +380,24 @@ Hadiah: +10 EXP, +15 gold, +10 skor.
 
 ```
 Kamu dikalahkan oleh Slime...
-Gold tinggal 107, HP dipulihkan penuh. Kembali ke hub.
 ```
+
+Lalu layar game over langsung muncul tanpa perlu menekan Enter:
+
+```
++GAME OVER---------------------------------------+
+| Kamu kalah di pertempuran.                     |
+| Pemain : farras (level 1, skor 0)              |
+| Gold   : 107   Potion: 0   Item: 0             |
+| Reset mengembalikan level, gold, dan item ke awal run.
++------------------------------------------------+
+  1. Mulai ulang (reset run)
+  2. Kembali ke menu utama
+```
+
+Pilihan 1 mereset level, HP, gold, potion, dan inventory ke nilai awal run
+(nama dan seed tetap), lalu kembali ke hub. Pilihan 2 meninggalkan run dan
+kembali ke menu utama. HP tidak pernah dipulihkan diam-diam.
 
 Naik level (pesan di hub):
 

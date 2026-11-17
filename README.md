@@ -208,6 +208,11 @@ menyimpan peta.
 - **Cache 5x5 chunk.** Dungeon hanya menghitung area 80x80 sel di sekitar
   pemain, lalu menggeser cache ketika pemain pindah chunk. Kamera menampilkan
   jendela 25x15 dengan pemain selalu di tengah.
+- **Kalah = game over.** Kekalahan tidak lagi memulihkan HP diam-diam.
+  Layar game over muncul langsung (tanpa Enter) dengan dua pilihan: reset run
+  (level, HP, gold, potion, dan item kembali ke awal; nama dan seed tetap) atau
+  kembali ke menu utama. Setelah kalah di dungeon, run ikut berhenti supaya
+  pemain tidak berjalan dengan HP kosong.
 - **DFS.** Saat masuk, DFS memeriksa apakah ujung koridor area awal bisa
   dicapai dari titik start. Hasilnya muncul sebagai pesan status.
 - **BFS.** Tombol H menandai jalur terpendek ke treasure terdekat di dalam

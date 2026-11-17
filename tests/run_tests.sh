@@ -95,6 +95,7 @@ skenario "S01 nama kosong/terlalu panjang" tests/in_s01.txt "| Pemain : AAAAAAAA
 skenario "S02 input huruf pada menu" tests/in_s02.txt "Input tidak valid"
 skenario "S03 battle sampai menang" tests/in_s03.txt "Hadiah:"
 skenario "S04 battle sampai kalah" tests/in_s04.txt "Kamu dikalahkan"
+skenario "S18 kalah membuka layar game over" tests/in_s04.txt "Mulai ulang (reset run)"
 skenario "S05 gacha 10x gold kurang" tests/in_s05.txt "Gold kurang! Butuh 900 gold"
 skenario "S09 jual item" tests/in_s09.txt "Terjual:"
 
