@@ -180,8 +180,13 @@ Peta dungeon tidak lagi dibaca dari file. Setiap sel dunia dihitung dari seed
 pemain, jadi dunia tidak terbatas ke segala arah dan tidak butuh memori untuk
 menyimpan peta.
 
-- **Isi sel.** Koridor terbuka pada `y = 1 (mod 4)` dan poros vertikal pada
-  `x = 1 (mod 6)`. Sel lantai lain kosong, dan sekitar satu dari 89 sel lantai
+- **Terrain per chunk.** Setiap chunk 16x16 memilih satu dari empat varian
+  terrain dari hash-nya sendiri: maze (recursive backtracker), ruang-ruang,
+  gua (noise yang dihaluskan), dan aula berpilar. Tidak ada pola koridor global,
+  jadi bentuk peta berubah total antar seed. Tiap sisi chunk punya gate dua sel
+  pada posisi hasil hash dari sisi bersama, lalu pass konektivitas menambal gate
+  ke tengah chunk dan menutup kantong lantai yang terputus. Sel lantai kosong,
+  dan sekitar satu dari 89 sel lantai
   berisi treasure. Semua keputusan itu berasal dari `cellHash(seed, x, y)`,
   sebuah hash integer murni tanpa `rand()`.
 - **Isi per chunk.** Tiap chunk 16x16 melempar tiga dadu terpisah dari seed:

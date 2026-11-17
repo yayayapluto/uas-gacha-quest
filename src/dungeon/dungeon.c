@@ -21,14 +21,6 @@
 #define VIEW_WIDTH 25
 #define VIEW_HEIGHT 15
 
-/* Non-negative modulo, so the world pattern keeps repeating on negative coordinates. */
-static int floorMod(int x, int m)
-{
-    int r = x % m;
-    if (r < 0) r += m;
-    return r;
-}
-
 /* Floor division for negative numbers, used to map world coordinates to chunks. */
 static int floorDiv(int x, int m)
 {
@@ -56,38 +48,318 @@ static int chunkHas(unsigned int seed, int chunkX, int chunkY, int kind, int pct
     return (int)(h % 100u) < pct;
 }
 
+/* ---- chunk terrain --------------------------------------------------- */
+
+/* Chunk terrain is generated once per (seed, chunk) and memoised. The cache is
+   direct-mapped: the index is a hash of the key, so a collision regenerates the
+   chunk instead of evicting a neighbour that the view is about to ask for. */
+#define CHUNK_CELLS (CHUNK_SIZE * CHUNK_SIZE)
+#define CHUNK_CACHE_SLOTS 64
+#define TERRAIN_VARIANTS 4
+
+typedef struct {
+    unsigned int seed;
+    int cx, cy;
+    char cell[CHUNK_SIZE][CHUNK_SIZE];  /* [y][x], '#' wall, '.' floor */
+} ChunkMap;
+
+static ChunkMap chunkCache[CHUNK_CACHE_SLOTS];
+
+/* Salted chunk roll: same key always yields the same number. */
+static unsigned int chunkRand(unsigned int seed, int cx, int cy, unsigned int salt)
+{
+    return cellHash(seed ^ (0x9E3779B9u * salt), cx, cy);
+}
+
+static void carveH(char g[][CHUNK_SIZE], int y, int x0, int x1)
+{
+    int x;
+    if (x0 > x1) { int t = x0; x0 = x1; x1 = t; }
+    for (x = x0; x <= x1; x++) g[y][x] = '.';
+}
+
+static void carveV(char g[][CHUNK_SIZE], int x, int y0, int y1)
+{
+    int y;
+    if (y0 > y1) { int t = y0; y0 = y1; y1 = t; }
+    for (y = y0; y <= y1; y++) g[y][x] = '.';
+}
+
+static void carveRect(char g[][CHUNK_SIZE], int x0, int y0, int x1, int y1)
+{
+    int y;
+    for (y = y0; y <= y1; y++) carveH(g, y, x0, x1);
+}
+
+/* Gate position on one side of a chunk. The key is built from the shared edge,
+   so the two chunks on that edge carve the same cell and stay connected. */
+static int edgeGate(unsigned int seed, int cx, int cy, int side)
+{
+    unsigned int r;
+    if (side == 0 || side == 1)
+        r = chunkRand(seed, 2 * cx + (side ? 1 : -1), cy, 11u);
+    else
+        r = chunkRand(seed, cx, 2 * cy + (side == 3 ? 1 : -1), 13u);
+    return 1 + (int)(r % (unsigned int)(CHUNK_SIZE - 2));
+}
+
+/* Recursive-backtracker maze on the odd lattice: cells at (1+2m, 1+2n). */
+static void genMaze(unsigned int seed, int cx, int cy, char g[][CHUNK_SIZE])
+{
+    unsigned char seen[CHUNK_SIZE / 2][CHUNK_SIZE / 2];
+    int stack[CHUNK_SIZE * CHUNK_SIZE / 2][2];
+    int top = 0;
+    int x0 = cx * CHUNK_SIZE, y0 = cy * CHUNK_SIZE;
+
+    memset(seen, 0, sizeof seen);
+    seen[0][0] = 1;
+    g[1][1] = '.';
+    stack[0][0] = 0;
+    stack[0][1] = 0;
+    while (top >= 0) {
+        int mx = stack[top][0], my = stack[top][1];
+        int opts[4][2], n = 0, k;
+        int d;
+        static const int dx[4] = { -1, 1, 0, 0 };
+        static const int dy[4] = { 0, 0, -1, 1 };
+        for (d = 0; d < 4; d++) {
+            int nx = mx + dx[d], ny = my + dy[d];
+            if (nx < 0 || ny < 0 || nx >= CHUNK_SIZE / 2 || ny >= CHUNK_SIZE / 2) continue;
+            if (seen[ny][nx]) continue;
+            opts[n][0] = nx;
+            opts[n][1] = ny;
+            n++;
+        }
+        if (n == 0) {
+            top--;
+            continue;
+        }
+        k = (int)(chunkRand(seed, x0 + 1 + 2 * mx, y0 + 1 + 2 * my, 23u) % (unsigned int)n);
+        {
+            int nx = opts[k][0], ny = opts[k][1];
+            seen[ny][nx] = 1;
+            g[1 + 2 * ny][1 + 2 * nx] = '.';
+            g[1 + 2 * my + (ny - my)][1 + 2 * mx + (nx - mx)] = '.';
+            top++;
+            stack[top][0] = nx;
+            stack[top][1] = ny;
+        }
+    }
+}
+
+/* Two-by-two rooms of hashed size; the connectivity pass cuts the doors. */
+static void genRooms(unsigned int seed, int cx, int cy, char g[][CHUNK_SIZE])
+{
+    int qi, qj;
+    int x0 = cx * CHUNK_SIZE, y0 = cy * CHUNK_SIZE;
+    for (qj = 0; qj < 2; qj++) {
+        for (qi = 0; qi < 2; qi++) {
+            unsigned int r = chunkRand(seed, x0 + qi * 8, y0 + qj * 8, 31u);
+            int insetX = (int)(r % 2u), insetY = (int)((r >> 4) % 2u);
+            int xa = qi * 8 + 1 + insetX, xb = qi * 8 + 6 + insetY;
+            int ya = qj * 8 + 1 + insetY, yb = qj * 8 + 6 + insetX;
+            carveRect(g, xa, ya, xb, yb);
+        }
+    }
+}
+
+/* Blobby cave from hashed noise, smoothed twice so single cells vanish. */
+static void genCavern(unsigned int seed, int cx, int cy, char g[][CHUNK_SIZE])
+{
+    int pass, x, y;
+    int x0 = cx * CHUNK_SIZE, y0 = cy * CHUNK_SIZE;
+    char next[CHUNK_SIZE][CHUNK_SIZE];
+
+    for (y = 0; y < CHUNK_SIZE; y++)
+        for (x = 0; x < CHUNK_SIZE; x++)
+            g[y][x] = (cellHash(seed ^ 0xCAFEu, x0 + x, y0 + y) % 100u < 46u) ? '#' : '.';
+    for (pass = 0; pass < 2; pass++) {
+        for (y = 0; y < CHUNK_SIZE; y++) {
+            for (x = 0; x < CHUNK_SIZE; x++) {
+                int walls = 0, dx, dy;
+                for (dy = -1; dy <= 1; dy++)
+                    for (dx = -1; dx <= 1; dx++) {
+                        int nx = x + dx, ny = y + dy;
+                        if (!dx && !dy) continue;
+                        if (nx < 0 || ny < 0 || nx >= CHUNK_SIZE || ny >= CHUNK_SIZE) walls++;
+                        else if (g[ny][nx] == '#') walls++;
+                    }
+                next[y][x] = walls >= 5 ? '#' : '.';
+            }
+        }
+        memcpy(g, next, sizeof next);
+    }
+}
+
+/* Open hall broken up by a few hashed pillar blocks. */
+static void genPillars(unsigned int seed, int cx, int cy, char g[][CHUNK_SIZE])
+{
+    int i;
+    int x0 = cx * CHUNK_SIZE, y0 = cy * CHUNK_SIZE;
+    carveRect(g, 0, 0, CHUNK_SIZE - 1, CHUNK_SIZE - 1);
+    for (i = 0; i < 5; i++) {
+        unsigned int r = chunkRand(seed, x0, y0, 41u + (unsigned int)i);
+        int px = 2 + (int)(r % (unsigned int)(CHUNK_SIZE - 6));
+        int py = 2 + (int)((r >> 8) % (unsigned int)(CHUNK_SIZE - 6));
+        int w = 1 + (int)((r >> 16) % 2u), h = 1 + (int)((r >> 20) % 2u);
+        {
+            int y, x;
+            for (y = py; y < py + h && y < CHUNK_SIZE; y++)
+                for (x = px; x < px + w && x < CHUNK_SIZE; x++) g[y][x] = '#';
+        }
+    }
+}
+
+/* Flood fill from the chunk centre and wall off whatever cannot be reached,
+   then link every open gate to the centre so neighbouring chunks join up. */
+#define GATE_COUNT 8
+static void connectChunk(char g[][CHUNK_SIZE], const int gateX[GATE_COUNT],
+                         const int gateY[GATE_COUNT], int extra)
+{
+    static unsigned char seen[CHUNK_SIZE][CHUNK_SIZE];
+    int queue[CHUNK_CELLS][2];
+    int head = 0, tail = 0, k, x, y;
+    static const int dx[4] = { -1, 1, 0, 0 };
+    static const int dy[4] = { 0, 0, -1, 1 };
+
+    g[CHUNK_SIZE / 2][CHUNK_SIZE / 2] = '.';
+    memset(seen, 0, sizeof seen);
+    seen[CHUNK_SIZE / 2][CHUNK_SIZE / 2] = 1;
+    queue[tail][0] = CHUNK_SIZE / 2;
+    queue[tail][1] = CHUNK_SIZE / 2;
+    tail++;
+    while (head < tail) {
+        int cx = queue[head][0], cy = queue[head][1], d;
+        head++;
+        for (d = 0; d < 4; d++) {
+            int nx = cx + dx[d], ny = cy + dy[d];
+            if (nx < 0 || ny < 0 || nx >= CHUNK_SIZE || ny >= CHUNK_SIZE) continue;
+            if (seen[ny][nx] || g[ny][nx] == '#') continue;
+            seen[ny][nx] = 1;
+            queue[tail][0] = nx;
+            queue[tail][1] = ny;
+            tail++;
+        }
+    }
+    /* gates first: an L-shaped cut from the edge cell to the centre */
+    for (k = 0; k < GATE_COUNT; k++) {
+        int gx = gateX[k], gy = gateY[k];
+        if (seen[gy][gx]) continue;
+        if (gx == 0 || gx == CHUNK_SIZE - 1) {
+            carveH(g, gy, gx, CHUNK_SIZE / 2);
+            carveV(g, CHUNK_SIZE / 2, gy, CHUNK_SIZE / 2);
+        } else {
+            carveV(g, gx, gy, CHUNK_SIZE / 2);
+            carveH(g, CHUNK_SIZE / 2, gx, CHUNK_SIZE / 2);
+        }
+    }
+    if (extra) {
+        /* world start sits at chunk-local (1,1) */
+        if (!seen[1][1]) {
+            carveH(g, 1, 1, CHUNK_SIZE / 2);
+            carveV(g, CHUNK_SIZE / 2, 1, CHUNK_SIZE / 2);
+        }
+    }
+    /* wall off pockets that are still sealed from the centre */
+    memset(seen, 0, sizeof seen);
+    head = tail = 0;
+    seen[CHUNK_SIZE / 2][CHUNK_SIZE / 2] = 1;
+    queue[tail][0] = CHUNK_SIZE / 2;
+    queue[tail][1] = CHUNK_SIZE / 2;
+    tail++;
+    while (head < tail) {
+        int cx = queue[head][0], cy = queue[head][1], d;
+        head++;
+        for (d = 0; d < 4; d++) {
+            int nx = cx + dx[d], ny = cy + dy[d];
+            if (nx < 0 || ny < 0 || nx >= CHUNK_SIZE || ny >= CHUNK_SIZE) continue;
+            if (seen[ny][nx] || g[ny][nx] == '#') continue;
+            seen[ny][nx] = 1;
+            queue[tail][0] = nx;
+            queue[tail][1] = ny;
+            tail++;
+        }
+    }
+    for (y = 0; y < CHUNK_SIZE; y++)
+        for (x = 0; x < CHUNK_SIZE; x++)
+            if (!seen[y][x]) g[y][x] = '#';
+}
+
+static void generateChunk(unsigned int seed, int cx, int cy, char g[][CHUNK_SIZE])
+{
+    int gateX[GATE_COUNT], gateY[GATE_COUNT], k;
+    int variant = (int)(chunkRand(seed, cx, cy, 7u) % TERRAIN_VARIANTS);
+
+    memset(g, '#', CHUNK_CELLS);
+    switch (variant) {
+    case 0: genMaze(seed, cx, cy, g); break;
+    case 1: genRooms(seed, cx, cy, g); break;
+    case 2: genCavern(seed, cx, cy, g); break;
+    default: genPillars(seed, cx, cy, g); break;
+    }
+    /* Each side gets a two-cell gate so the seam between chunks reads as a
+       passage, not as a wall with a single slot. West 0, east 1, north 2, south 3. */
+    gateX[0] = 0;  gateY[0] = edgeGate(seed, cx, cy, 0);
+    gateX[1] = CHUNK_SIZE - 1; gateY[1] = edgeGate(seed, cx, cy, 1);
+    gateX[2] = edgeGate(seed, cx, cy, 2); gateY[2] = 0;
+    gateX[3] = edgeGate(seed, cx, cy, 3); gateY[3] = CHUNK_SIZE - 1;
+    for (k = 0; k < 4; k++) {
+        gateX[4 + k] = gateX[k];
+        gateY[4 + k] = gateY[k];
+        if (gateX[k] == 0 || gateX[k] == CHUNK_SIZE - 1)
+            gateY[4 + k] = gateY[k] + 1 <= CHUNK_SIZE - 2 ? gateY[k] + 1 : gateY[k] - 1;
+        else
+            gateX[4 + k] = gateX[k] + 1 <= CHUNK_SIZE - 2 ? gateX[k] + 1 : gateX[k] - 1;
+    }
+    for (k = 0; k < GATE_COUNT; k++) g[gateY[k]][gateX[k]] = '.';
+    connectChunk(g, gateX, gateY, cx == 0 && cy == 0);
+}
+
+/* Memoised chunk lookup; a cache miss regenerates the chunk in place. */
+static const ChunkMap *chunkMap(unsigned int seed, int cx, int cy)
+{
+    unsigned int slot = (seed * 2654435761u) ^ ((unsigned int)cx * 40503u) ^ ((unsigned int)cy * 6151u);
+    ChunkMap *m = &chunkCache[slot % CHUNK_CACHE_SLOTS];
+    if (!(m->seed == seed && m->cx == cx && m->cy == cy)) {
+        memset(m, 0, sizeof *m);
+        m->seed = seed;
+        m->cx = cx;
+        m->cy = cy;
+        generateChunk(seed, cx, cy, m->cell);
+    }
+    return m;
+}
+
 /* Hash-searches the chunk for the n-th floor cell; -1 when the chunk has fewer. */
 static int chunkFloorCell(unsigned int seed, int chunkX, int chunkY, int n,
                           int *outX, int *outY)
 {
+    const ChunkMap *m = chunkMap(seed, chunkX, chunkY);
     int i, seen = 0;
-    /* the chunk is only 256 cells, so a full scan keyed by a hashed start is
-       cheaper and safer than a permutation that can repeat for non-coprime steps */
-    int start = (int)(cellHash(seed, chunkX + n, chunkY) % (CHUNK_SIZE * CHUNK_SIZE));
+    int start = (int)(cellHash(seed, chunkX + n, chunkY) % CHUNK_CELLS);
     int x0 = chunkX * CHUNK_SIZE, y0 = chunkY * CHUNK_SIZE;
 
-    for (i = 0; i < CHUNK_SIZE * CHUNK_SIZE; i++) {
-        int off = (start + i) % (CHUNK_SIZE * CHUNK_SIZE);
-        int x = x0 + off % CHUNK_SIZE, y = y0 + off / CHUNK_SIZE;
-        int shaftX = floorMod(x, 6), corridorY = floorMod(y, 4);
-        if (shaftX != 1 && corridorY != 1) continue;
+    for (i = 0; i < CHUNK_CELLS; i++) {
+        int off = (start + i) % CHUNK_CELLS;
+        int lx = off % CHUNK_SIZE, ly = off / CHUNK_SIZE;
+        if (m->cell[ly][lx] == '#') continue;
         if (seen++ == n) {
-            *outX = x;
-            *outY = y;
+            *outX = x0 + lx;
+            *outY = y0 + ly;
             return 1;
         }
     }
     return 0;
 }
 
-/* World cell derived from the seed: corridors on y = 1 (mod 4) and shafts on
-   x = 1 (mod 6). Each 16x16 chunk rolls independently for a monster, a chest,
-   and a gold pile, then picks a floor cell for each one that hit. */
+/* World cell derived from the seed. Each chunk picks a terrain variant (maze,
+   rooms, cave, pillars) from its own hash, carves gates on the shared edges,
+   and rolls independently for a monster, a chest, and a gold pile. */
 char dungeonCell(unsigned int seed, int x, int y)
 {
-    int shaftX = floorMod(x, 6);
-    int corridorY = floorMod(y, 4);
     int chunkX = floorDiv(x, CHUNK_SIZE), chunkY = floorDiv(y, CHUNK_SIZE);
+    const ChunkMap *m = chunkMap(seed, chunkX, chunkY);
+    int lx = x - chunkX * CHUNK_SIZE, ly = y - chunkY * CHUNK_SIZE;
     int i;
     static const struct { int kind, pct; char mark; } contents[] = {
         { 1, CHUNK_MONSTER_PCT, 'M' },
@@ -95,8 +367,7 @@ char dungeonCell(unsigned int seed, int x, int y)
         { 3, CHUNK_GOLD_PCT, 'G' },
     };
 
-    if (shaftX != 1 && corridorY != 1) return '#';
-    if (x == 1 && y == 1) return '.';
+    if (m->cell[ly][lx] == '#') return '#';
     for (i = 0; i < 3; i++) {
         int cx, cy;
         if (!chunkHas(seed, chunkX, chunkY, contents[i].kind, contents[i].pct)) continue;
@@ -863,7 +1134,7 @@ void runDungeon(Player *p, const Item catalog[], int catalogCount,
     far.row = AREA_MAX - 3;
     far.col = AREA_MAX - 3;
     if (dfsReachable(area, from, far))
-        strcpy(message, "Area awal tersambung dari titik awal sampai ujung koridor (DFS).");
+        strcpy(message, "Area awal tersambung dari titik awal sampai isi terjauh (DFS).");
     else
         strcpy(message, "Area awal tidak tersambung.");
 

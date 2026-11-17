@@ -18,8 +18,8 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
 7. **Dungeon prosedural, bukan peta dari file.** PRD bagian 7 meminta peta
    `dungeon1-3.txt`, tetapi permintaan terbaru adalah dungeon dengan seed
    seperti Minecraft. Dunia sekarang dihitung per sel dari
-   `cellHash(seed, x, y)`: koridor pada `y = 1 (mod 4)`, poros pada
-   `x = 1 (mod 6)`, treasure kira-kira 1 dari 89 sel lantai. File peta
+   `cellHash(seed, x, y)`. Setiap chunk memilih varian terrain dari hash-nya
+   (lihat keputusan 40), treasure kira-kira 1 dari 89 sel lantai. File peta
    dihapus, `muatPeta` dan konstanta `MAX_BARIS`/`MAX_KOLOM` ikut dibuang.
 8. **Seed dunia.** Seed diminta sekali saat game baru, disimpan di
    `data/save.txt`, dan dipakai ulang setelah Lanjutkan. Prompt yang dijawab
@@ -138,3 +138,11 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
 39. **Aturan crit hanya satu tempat.** `rollCrit` memakai `CRIT_CHANCE` dan
     `CRIT_MULTIPLIER` dari `config.h`; cabang bertahan memakai fungsi yang sama
     supaya angka crit pada log tidak bisa berbeda dari damage yang masuk.
+
+40. **Terrain dungeon di-roll per chunk, bukan satu pola global.** Kisi koridor
+    lama (`y = 1 mod 4`, `x = 1 mod 6`) membuat semua seed terasa sama. Sekarang
+    tiap chunk memilih maze, ruang, gua, atau aula berpilar dari hash-nya, gate
+    dua sel di tiap sisi dihitung dari sisi bersama agar dua chunk bersebelahan
+    membuka sel yang sama, dan pass konektivitas menambal gate ke tengah serta
+    menutup kantong lantai yang tak terjangkau. Hasilnya tetap deterministik per
+    seed dan seluruh area pandang tetap tersambung.

@@ -639,7 +639,7 @@ maksimum 25x15 dan minimum 11x7.)
 | HP 100/100                                     |
 | ####################        seed 12345         |
 +------------------------------------------------+
-Area awal tersambung dari titik awal sampai ujung koridor (DFS).
+Area awal tersambung dari titik awal sampai isi terjauh (DFS).
 
 Isi chunk (roll per 16x16, dari seed):
 
