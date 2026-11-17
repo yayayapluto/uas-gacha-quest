@@ -599,7 +599,7 @@ unsigned int randomWorldSeed(void)
 }
 
 /* Asks for a world seed. Empty input draws a fresh one, non-numeric input is rejected. */
-unsigned int promptWorldSeed(void)
+int promptWorldSeedTry(unsigned int *out)
 {
     char line[32];
 
@@ -607,14 +607,14 @@ unsigned int promptWorldSeed(void)
         for (;;) {
             printf("Seed dunia (Enter saja untuk acak): ");
             if (!readLine(line, sizeof line)) {
-                unsigned int seed = randomWorldSeed();
-                printf("\nSeed acak dipilih: %u\n", seed);
-                return seed;
+                *out = randomWorldSeed();
+                printf("\nSeed acak dipilih: %u\n", *out);
+                return 1;
             }
             if (line[0] == '\0') {
-                unsigned int seed = randomWorldSeed();
-                printf("Seed acak dipilih: %u\n", seed);
-                return seed;
+                *out = randomWorldSeed();
+                printf("Seed acak dipilih: %u\n", *out);
+                return 1;
             }
             {
                 char *end;
@@ -626,7 +626,8 @@ unsigned int promptWorldSeed(void)
                     printf("Seed harus angka bulat 0 sampai 4294967295.\n");
                     continue;
                 }
-                return (unsigned int)value;
+                *out = (unsigned int)value;
+                return 1;
             }
         }
     }
@@ -635,17 +636,26 @@ unsigned int promptWorldSeed(void)
     for (;;) {
         unsigned int seed;
         ui_line_begin("Seed dunia (Enter saja untuk acak):");
-        if (!readLine(line, sizeof line)) {
-            seed = randomWorldSeed();
-            ui_line_note("Seed acak dipilih: %u", seed);
-            ui_line_end();
-            return seed;
+        {
+            int st = readLineEsc(line, sizeof line);
+            if (st < 0) {
+                ui_line_end();
+                return 0;
+            }
+            if (st == 0) {
+                seed = randomWorldSeed();
+                ui_line_note("Seed acak dipilih: %u", seed);
+                ui_line_end();
+                *out = seed;
+                return 1;
+            }
         }
         if (line[0] == '\0') {
             seed = randomWorldSeed();
             ui_line_note("Seed acak dipilih: %u", seed);
             ui_line_end();
-            return seed;
+            *out = seed;
+            return 1;
         }
         {
             char *end;
@@ -658,9 +668,17 @@ unsigned int promptWorldSeed(void)
                 continue;
             }
             ui_line_end();
-            return (unsigned int)value;
+            *out = (unsigned int)value;
+            return 1;
         }
     }
+}
+
+unsigned int promptWorldSeed(void)
+{
+    unsigned int seed = 0;
+    if (!promptWorldSeedTry(&seed)) seed = randomWorldSeed();
+    return seed;
 }
 
 /* Turn loop shared by a fresh run and a restored session. */
@@ -767,6 +785,13 @@ static void dungeonLoop(Player *p, DungeonState *st, char area[][AREA_MAX],
             }
             break;
         case 'Q':
+            if (caps_interactive()) {
+                ui_input_screen("Dungeon");
+                if (!confirmPrompt("Keluar dungeon? Progress langkah hilang. (y/n): ")) {
+                    strcpy(message, "Keluar dungeon dibatalkan.");
+                    break;
+                }
+            }
             if (!caps_interactive()) {
                 printf("\033[?25h");
                 clear_screen();

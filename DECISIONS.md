@@ -124,3 +124,17 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
 35. **Palet biome di token `Style`, bukan di dungeon.** Cell menyimpan gaya
     sendiri, dan `render_flush` perlu tahu kapan mengeluarkan latar; menaruh
     palet di layer render membuat dungeon tidak perlu menyentuh ANSI.
+
+36. **Esc membatalkan input, bukan sentinel.** `readLineEsc` mengembalikan -1
+    untuk Esc dan -2 untuk EOF; pembungkus `readStringTry`/`readIntTry`
+    mengembalikan 0 supaya pemanggil cukup `break`. Sentinel `999` dihapus
+    karena bertabrakan dengan nilai sah di rentang indeks.
+37. **Aksi yang tidak bisa dibatalkan minta konfirmasi.** Jual item, pull 10x,
+    timpa slot save, dan keluar dungeon lewat Esc memakai `confirmPrompt`
+    supaya salah tekan tidak menghilangkan gold, item, atau progres langkah.
+38. **Gacha penuh mengembalikan gold.** `pullOnce` mengembalikan 0 ketika
+    inventory penuh, lalu pemanggil mengembalikan biaya pull (90 gold per item
+    pada 10x), sehingga pull yang tidak dapat tempat tidak menagih pemain.
+39. **Aturan crit hanya satu tempat.** `rollCrit` memakai `CRIT_CHANCE` dan
+    `CRIT_MULTIPLIER` dari `config.h`; cabang bertahan memakai fungsi yang sama
+    supaya angka crit pada log tidak bisa berbeda dari damage yang masuk.

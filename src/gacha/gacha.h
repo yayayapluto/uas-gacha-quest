@@ -8,6 +8,6 @@ int rollRarity(int *pity);
 int findItemInInventory(const Player *p, int id);
 int duplicatePrice(int rarity);
 const char *rarityName(int rarity);
-void pullOnce(Player *p, const Item catalog[], int count, int rarity);
+int pullOnce(Player *p, const Item catalog[], int count, int rarity);   /* 0 when full: caller refunds */
 
 #endif

@@ -9,6 +9,7 @@
 #include "autosave.h"
 
 #define INV_NAME_COLS 17
+#define INV_VISIBLE_ROWS 4
 
 static void inventoryDraw(void *ctx, int sel)
 {
@@ -21,12 +22,16 @@ static void inventoryDraw(void *ctx, int sel)
     ui_frame("Inventory");
     ui_status_panel_at(p, 2, 0, UI_COLS);
 
-    snprintf(buf, sizeof buf, "Inventory (%d/%d)", p->itemCount, MAX_ITEM);
+    if (p->itemCount > INV_VISIBLE_ROWS)
+        snprintf(buf, sizeof buf, "Inventory (%d/%d) - tampil %d pertama",
+                 p->itemCount, MAX_ITEM, INV_VISIBLE_ROWS);
+    else
+        snprintf(buf, sizeof buf, "Inventory (%d/%d)", p->itemCount, MAX_ITEM);
     ui_panel(8, 0, UI_COLS, 9, buf);
     render_text_clipped(9, 2, UI_COLS - 4, ST_DIM,
                         "%-4s %-17s %-4s %-9s %s",
                         "Idx", "Nama", "Tipe", "Rarity", "Power");
-    for (i = 0, row = 10; i < p->itemCount && i < 6; i++, row++) {
+    for (i = 0, row = 10; i < p->itemCount && i < INV_VISIBLE_ROWS; i++, row++) {
         char eq[8];
         char name[INV_NAME_COLS + 1];
         snprintf(eq, sizeof eq, "%d%s", i,
@@ -44,7 +49,17 @@ static void inventoryDraw(void *ctx, int sel)
                             p->inventory[i].power);
     }
 
+    /* search hits and equip results land in the log; show the last two so the
+       player sees what the action did without leaving the screen */
+    {
+        int start = ui_log_count() > 2 ? ui_log_count() - 2 : 0;
+        int logRow = 10 + INV_VISIBLE_ROWS;
+        for (i = start; i < ui_log_count(); i++, logRow++)
+            render_text_clipped(logRow, 2, UI_COLS - 4, ui_log_style_at(i), "%s",
+                                ui_log_text(i));
+    }
     ui_menu_v(18, 0, items, nums, 4, sel);
+    ui_message(17);
     ui_footer(NULL);
 }
 
@@ -92,8 +107,8 @@ void inventoryMenu(Player *p)
                 set_message("Inventory kosong.");
                 break;
             }
-            index = readInt("Nomor indeks item yang dipasang (999 batal): ", 0, 999);
-            if (index == 999) break;
+            if (!readIntTry("Nomor indeks item yang dipasang: ", 0, MAX_ITEM - 1, &index))
+                break;
             if (index >= p->itemCount) {
                 set_message("Indeks tidak ada di inventory.");
                 break;

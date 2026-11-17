@@ -25,14 +25,20 @@ int calculateDamage(int atk, int def)
     return base + plat_rand() % 4;
 }
 
+/* Single source of the crit rule: callers that need raw damage reuse this. */
+static int rollCrit(int dmg, int *critical)
+{
+    *critical = 0;
+    if (plat_rand() % 100 < CRIT_CHANCE) {
+        *critical = 1;
+        dmg *= CRIT_MULTIPLIER;
+    }
+    return dmg;
+}
+
 int attack(const char *from, const char *to, int atk, int targetDef, int *targetHp, int *critical)
 {
-    int dmg = calculateDamage(atk, targetDef);
-    *critical = 0;
-    if (plat_rand() % 100 < 10) {
-        dmg *= 2;
-        *critical = 1;
-    }
+    int dmg = rollCrit(calculateDamage(atk, targetDef), critical);
     *targetHp -= dmg;
     {
         char dmgText[40];
@@ -127,10 +133,9 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
         case 2: {
             int dmg;
             ui_log_event(p->name, "bertahan", NULL, NULL, ST_ACCENT, ST_TEXT, ST_TEXT);
-            dmg = calculateDamage(enemy.atk, totalDef(p));
+            dmg = rollCrit(calculateDamage(enemy.atk, totalDef(p)), &critical);
             {
                 char dmgText[40];
-                if (plat_rand() % 100 < 10) dmg *= 2;
                 snprintf(dmgText, sizeof dmgText, "%d damage", dmg);
                 ui_log_event(enemy.name, "menyerang", p->name, dmgText,
                              ST_DANGER, ST_ACCENT, ST_GOLD);
@@ -147,7 +152,7 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
                 break;
             }
             p->potion--;
-            p->hp += 50;
+            p->hp += POTION_HEAL;
             if (p->hp > p->maxHp) p->hp = p->maxHp;
             {
                 char hpText[40];

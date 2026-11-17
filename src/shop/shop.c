@@ -156,7 +156,7 @@ void shopMenu(Player *p)
                 set_message("Gold tidak cukup untuk membeli potion.");
                 break;
             }
-            amount = readInt("Jumlah potion yang dibeli (1-5): ", 1, maxBuy);
+            if (!readIntTry("Jumlah potion yang dibeli: ", 1, maxBuy, &amount)) break;
             p->gold -= amount * POTION_COST;
             p->potion += amount;
             set_message("Beli %d potion. Gold: %d, Potion: %d.", amount, p->gold, p->potion);
@@ -182,6 +182,14 @@ void shopMenu(Player *p)
             }
             {
                 int price = duplicatePrice(p->inventory[index].rarity);
+                char question[128];
+                ui_input_screen("Shop");
+                snprintf(question, sizeof question, "Jual %s seharga %d gold? (y/n): ",
+                         p->inventory[index].name, price);
+                if (!confirmPrompt(question)) {
+                    set_message("Penjualan dibatalkan.");
+                    break;
+                }
                 if (p->weaponIndex >= 0) oldWeaponId = p->inventory[p->weaponIndex].id;
                 if (p->armorIndex >= 0) oldArmorId = p->inventory[p->armorIndex].id;
                 p->gold += price;

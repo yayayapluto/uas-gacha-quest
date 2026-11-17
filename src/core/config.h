@@ -21,6 +21,10 @@
 #define POTION_COST 40
 #define HINT_COST 30
 
+#define CRIT_CHANCE 10      /* percent chance a hit is critical */
+#define CRIT_MULTIPLIER 2
+#define POTION_HEAL 50
+
 #define MAX_HINTS 3
 #define PITY_THRESHOLD 10
 

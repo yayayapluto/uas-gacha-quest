@@ -144,16 +144,24 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
         case 6: showStatus(p); break;
         case 7: {
             int slot = pickSaveSlot(1);
+            if (slot > 0 && saveSlotExists(slot)) {
+                char question[96];
+                snprintf(question, sizeof question, "Timpa save di slot %d? (y/n): ", slot);
+                if (!confirmPrompt(question)) {
+                    set_message("Penyimpanan dibatalkan.");
+                    saved = 0;
+                    break;
+                }
+            }
             if (slot > 0) saved = saveGameSlot(p, slot);
             else saved = 0;
             break;
         }
         case 0: {
-            char answer[MAX_NAME];
             if (!saved) {
                 ui_input_screen("Hub");
-                readString("Simpan sebelum keluar? (y/n): ", answer, MAX_NAME);
-                if (answer[0] == 'y' || answer[0] == 'Y') saveGame(p);
+                if (confirmPrompt("Simpan sebelum keluar? (y/n): ") && !saveGame(p))
+                    set_message("Gagal menyimpan sebelum keluar.");
             }
             recordScore(p);
             autosave_publish(p, AS_SCREEN_MENU, NULL, 0, NULL, 0, 0, 1);
@@ -233,9 +241,10 @@ int main(void)
         case 1: {
             char name[MAX_NAME];
             ui_input_screen("Game Baru");
-            readString("Masukkan nama pemain (maks 29 karakter): ", name, MAX_NAME);
+            if (!readStringTry("Masukkan nama pemain (maks 29 karakter): ", name, MAX_NAME))
+                break;
             initPlayer(&player, name);
-            player.seed = promptWorldSeed();
+            if (!promptWorldSeedTry(&player.seed)) break;
             set_message("Selamat datang, %s! Kamu dapat 200 gold.", player.name);
             runHub(&player, catalog, catalogCount, monsters, monsterCount);
             break;

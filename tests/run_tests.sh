@@ -98,6 +98,8 @@ skenario "S04 battle sampai kalah" tests/in_s04.txt "Kamu dikalahkan"
 skenario "S05 gacha 10x gold kurang" tests/in_s05.txt "Gold kurang! Butuh 900 gold"
 skenario "S09 jual item" tests/in_s09.txt "Terjual:"
 
+# Slot 1 must not exist yet: otherwise the overwrite confirmation eats an input line.
+rm -f data/save_1.txt
 cp -f data/leaderboard.txt data/leaderboard.uji.bak
 skenario "S10 simpan-lanjutkan" tests/in_s10.txt "Selamat datang kembali, UjiSv!"
 skenario "S15 leaderboard tercatat" tests/in_s15.txt "Skor UjiSkr"
@@ -117,6 +119,7 @@ rmdir data/uji.bak 2>/dev/null
 skenario "S12 gerak ke tembok" tests/in_s12.txt "Tembok! Tidak bisa lewat."
 skenario "S13 hint gold kurang" tests/in_s13.txt "Gold kurang, hint butuh 30 gold"
 
+rm -f data/save_1.txt
 skenario "S16 seed dunia diminta saat game baru" tests/in_s16.txt "dibangun dari seed 777"
 hits=$(grep -c "dibangun dari seed 777" tests/out_last.txt)
 if [ "$hits" -eq 2 ]; then
