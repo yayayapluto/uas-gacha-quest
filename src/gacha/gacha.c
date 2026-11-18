@@ -60,7 +60,7 @@ int rollRarity(int *pity)
     return r;
 }
 
-void pullOnce(Player *p, const Item catalog[], int count, int rarity)
+int pullOnce(Player *p, const Item catalog[], int count, int rarity)
 {
     Item candidates[MAX_ITEM];
     int candidateCount = 0, i, index, picked;
@@ -70,7 +70,7 @@ void pullOnce(Player *p, const Item catalog[], int count, int rarity)
             candidates[candidateCount] = catalog[i];
             candidateCount++;
         }
-    if (candidateCount == 0) return;
+    if (candidateCount == 0) return 1;
     picked = plat_rand() % candidateCount;
     index = findItemInInventory(p, candidates[picked].id);
     if (index >= 0) {
@@ -85,7 +85,10 @@ void pullOnce(Player *p, const Item catalog[], int count, int rarity)
         ui_log_style(style_rarity(rarity),
                      "  [%s] %s (power %d) -> baru!",
                      rarityName(rarity), candidates[picked].name, candidates[picked].power);
+    } else {
+        return 0;   /* no slot left: the caller refunds the pull */
     }
+    return 1;
 }
 
 /* Gold warning: a red message plus a log line, so it is visible on the frame
@@ -148,7 +151,12 @@ void gachaMenu(Player *p, const Item catalog[], int count)
             }
             p->gold -= PULL_COST;
             p->totalPull++;
-            pullOnce(p, catalog, count, rollRarity(&p->pity));
+            if (!pullOnce(p, catalog, count, rollRarity(&p->pity))) {
+                p->gold += PULL_COST;
+                ui_log_style(ST_DANGER, "Inventory penuh! Pull dibatalkan, %d gold dikembalikan.",
+                             PULL_COST);
+                set_message("Inventory penuh, gold dikembalikan.");
+            }
             autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
         } else {
             int i;
@@ -156,15 +164,30 @@ void gachaMenu(Player *p, const Item catalog[], int count)
                 warnGold(PULL10_COST, p->gold);
                 continue;
             }
+            {
+                char question[128];
+                snprintf(question, sizeof question, "Beli 10x pull (%d gold)? (y/n): ", PULL10_COST);
+                if (!confirmPrompt(question)) continue;
+            }
             p->gold -= PULL10_COST;
             ui_log("Hasil pull 10x:");
-            for (i = 0; i < 10; i++) {
-                p->totalPull++;
-                pullOnce(p, catalog, count, rollRarity(&p->pity));
+            {
+                int dropped = 0;
+                for (i = 0; i < 10; i++) {
+                    p->totalPull++;
+                    if (!pullOnce(p, catalog, count, rollRarity(&p->pity))) dropped++;
+                }
+                if (dropped > 0) {
+                    int refund = dropped * (PULL10_COST / 10);
+                    p->gold += refund;
+                    ui_log_style(ST_DANGER,
+                                 "Inventory penuh untuk %d item: %d gold dikembalikan.",
+                                 dropped, refund);
+                    set_message("Inventory penuh, %d gold dikembalikan.", refund);
+                }
             }
             autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
         }
         gachaDraw(p, -1);
-        ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
     }
 }

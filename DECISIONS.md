@@ -18,8 +18,8 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
 7. **Dungeon prosedural, bukan peta dari file.** PRD bagian 7 meminta peta
    `dungeon1-3.txt`, tetapi permintaan terbaru adalah dungeon dengan seed
    seperti Minecraft. Dunia sekarang dihitung per sel dari
-   `cellHash(seed, x, y)`: koridor pada `y = 1 (mod 4)`, poros pada
-   `x = 1 (mod 6)`, treasure kira-kira 1 dari 89 sel lantai. File peta
+   `cellHash(seed, x, y)`. Setiap chunk memilih varian terrain dari hash-nya
+   (lihat keputusan 40), treasure kira-kira 1 dari 89 sel lantai. File peta
    dihapus, `muatPeta` dan konstanta `MAX_BARIS`/`MAX_KOLOM` ikut dibuang.
 8. **Seed dunia.** Seed diminta sekali saat game baru, disimpan di
    `data/save.txt`, dan dipakai ulang setelah Lanjutkan. Prompt yang dijawab
@@ -124,3 +124,34 @@ Keputusan untuk hal yang tidak dispesifikasi PRD, diambil sederhana dan konsiste
 35. **Palet biome di token `Style`, bukan di dungeon.** Cell menyimpan gaya
     sendiri, dan `render_flush` perlu tahu kapan mengeluarkan latar; menaruh
     palet di layer render membuat dungeon tidak perlu menyentuh ANSI.
+
+36. **Esc membatalkan input, bukan sentinel.** `readLineEsc` mengembalikan -1
+    untuk Esc dan -2 untuk EOF; pembungkus `readStringTry`/`readIntTry`
+    mengembalikan 0 supaya pemanggil cukup `break`. Sentinel `999` dihapus
+    karena bertabrakan dengan nilai sah di rentang indeks.
+37. **Aksi yang tidak bisa dibatalkan minta konfirmasi.** Jual item, pull 10x,
+    timpa slot save, dan keluar dungeon lewat Esc memakai `confirmPrompt`
+    supaya salah tekan tidak menghilangkan gold, item, atau progres langkah.
+38. **Gacha penuh mengembalikan gold.** `pullOnce` mengembalikan 0 ketika
+    inventory penuh, lalu pemanggil mengembalikan biaya pull (90 gold per item
+    pada 10x), sehingga pull yang tidak dapat tempat tidak menagih pemain.
+39. **Aturan crit hanya satu tempat.** `rollCrit` memakai `CRIT_CHANCE` dan
+    `CRIT_MULTIPLIER` dari `config.h`; cabang bertahan memakai fungsi yang sama
+    supaya angka crit pada log tidak bisa berbeda dari damage yang masuk.
+
+40. **Terrain dungeon di-roll per chunk, bukan satu pola global.** Kisi koridor
+    lama (`y = 1 mod 4`, `x = 1 mod 6`) membuat semua seed terasa sama. Sekarang
+    tiap chunk memilih maze, ruang, gua, atau aula berpilar dari hash-nya, gate
+    dua sel di tiap sisi dihitung dari sisi bersama agar dua chunk bersebelahan
+    membuka sel yang sama, dan pass konektivitas menambal gate ke tengah serta
+    menutup kantong lantai yang tak terjangkau. Hasilnya tetap deterministik per
+    seed dan seluruh area pandang tetap tersambung.
+
+41. **Kalah berakhir di layar game over, bukan refill HP.** Memulihkan HP
+    otomatis menyembunyikan kekalahan dan membuat gold yang dibagi dua terasa
+    seperti hukuman tanpa pilihan. Sekarang HP dibiarkan 0, layar game over
+    langsung tampil tanpa Enter, dan pemain memilih: reset run (level, HP,
+    gold, potion, item kembali ke awal; nama dan seed tetap) atau kembali ke
+    menu utama. Kekalahan di dungeon ikut menghentikan run; tidak ada Enter di
+    antara giliran battle, dan flag `battleRunEnded`/`battleRunAborted`
+    menyampaikan hasil itu ke hub dan dungeon.

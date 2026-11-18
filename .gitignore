@@ -16,4 +16,6 @@ data/autosave.dat
 data/autosave.bak
 data/session.lock
 data/crash.log
+data/game.log
+data/game.log.1
 data/*.tmp.*

@@ -5,6 +5,8 @@
 #include "util.h"
 #include "ui.h"
 #include "render.h"
+#include "caps.h"
+#include "term.h"
 
 /* Fills a new player with the starting values from rule 6.1. */
 void initPlayer(Player *p, const char *name)
@@ -27,6 +29,17 @@ void initPlayer(Player *p, const char *name)
     p->itemCount = 0;
     p->weaponIndex = -1;
     p->armorIndex = -1;
+}
+
+void resetPlayer(Player *p)
+{
+    char name[MAX_NAME];
+    unsigned int seed = p->seed;
+
+    strncpy(name, p->name, sizeof name - 1);
+    name[sizeof name - 1] = '\0';
+    initPlayer(p, name);
+    p->seed = seed;
 }
 
 /* Adds EXP and resolves level-ups (possibly several at once). */
@@ -72,42 +85,45 @@ void showStatus(const Player *p)
     ui_frame("Status");
     ui_status_panel_at(p, 2, 0, UI_COLS);
 
-    ui_panel(9, 0, 50, 11, "STATISTIK");
+    ui_panel(9, 0, 50, 10, "STATISTIK & PERLENGKAPAN");
     snprintf(buf, sizeof buf, "Level      : %d (EXP %d/%d)", p->level, p->exp, expMax);
     render_text(10, 2, ST_TEXT, "%s", buf);
     ui_bar(11, 2, 44, p->exp, expMax > 0 ? expMax : 1, ST_ACCENT);
-    snprintf(buf, sizeof buf, "ATK        : %d", totalAtk(p));
+    snprintf(buf, sizeof buf, "ATK        : %d   DEF: %d", totalAtk(p), totalDef(p));
     render_text(12, 2, ST_TEXT, "%s", buf);
-    snprintf(buf, sizeof buf, "DEF        : %d", totalDef(p));
+    snprintf(buf, sizeof buf, "Potion     : %d   Pity: %d/%d", p->potion, p->pity,
+             PITY_THRESHOLD);
     render_text(13, 2, ST_TEXT, "%s", buf);
-    snprintf(buf, sizeof buf, "Potion     : %d", p->potion);
+    snprintf(buf, sizeof buf, "Total pull : %d   Item: %d/%d", p->totalPull,
+             p->itemCount, MAX_ITEM);
     render_text(14, 2, ST_TEXT, "%s", buf);
-    snprintf(buf, sizeof buf, "Pity       : %d/%d", p->pity, PITY_THRESHOLD);
-    render_text(15, 2, ST_TEXT, "%s", buf);
-    snprintf(buf, sizeof buf, "Total pull : %d", p->totalPull);
-    render_text(16, 2, ST_TEXT, "%s", buf);
     snprintf(buf, sizeof buf, "Seed dunia : %u", p->seed);
-    render_text(17, 2, ST_TEXT, "%s", buf);
-    snprintf(buf, sizeof buf, "Item       : %d/%d", p->itemCount, MAX_ITEM);
-    render_text(18, 2, ST_TEXT, "%s", buf);
+    render_text(15, 2, ST_TEXT, "%s", buf);
 
-    ui_panel(21, 0, 50, 4, "PERLENGKAPAN");
     if (p->weaponIndex >= 0) {
         const Item *w = &p->inventory[p->weaponIndex];
         snprintf(buf, sizeof buf, "Senjata: %s (power %d)", w->name, w->power);
-        render_text(22, 2, style_rarity(w->rarity), "%s", buf);
+        render_text(16, 2, style_rarity(w->rarity), "%s", buf);
     } else {
-        render_text(22, 2, ST_DIM, "Senjata: -");
+        render_text(16, 2, ST_DIM, "Senjata: -");
     }
     if (p->armorIndex >= 0) {
         const Item *a = &p->inventory[p->armorIndex];
         snprintf(buf, sizeof buf, "Armor  : %s (power %d)", a->name, a->power);
-        render_text(23, 2, style_rarity(a->rarity), "%s", buf);
+        render_text(17, 2, style_rarity(a->rarity), "%s", buf);
     } else {
-        render_text(23, 2, ST_DIM, "Armor  : -");
+        render_text(17, 2, ST_DIM, "Armor  : -");
     }
 
-    ui_footer(NULL);
+    ui_footer_line("Tekan tombol apa saja untuk kembali");
     ui_flush();
-    ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
+    if (caps_interactive()) {
+        char ch;
+        for (;;) {
+            TermKey k = term_getkey(&ch);
+            /* KEY_NONE is just the poll timeout: keep waiting, do not close. */
+            if (k == KEY_NONE || k == KEY_RESIZE) continue;
+            break;
+        }
+    }
 }

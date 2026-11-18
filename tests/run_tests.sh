@@ -16,7 +16,7 @@ CFLAGS="-std=c11 -Wall -Wextra -Wpedantic"
 INC="-Isrc/core -Isrc/util -Isrc/ui -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon -Isrc/platform"
 CFLAGS="$CFLAGS $INC"
 SAN="${1:-}"
-LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c src/ui/render.c src/ui/widgets.c src/platform/rng.c src/platform/atomicfile.c src/platform/lock.c src/platform/sig.c src/platform/crash.c src/platform/autosave.c src/platform/platform.c"
+LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c src/ui/render.c src/ui/widgets.c src/platform/rng.c src/platform/atomicfile.c src/platform/lock.c src/platform/sig.c src/platform/crash.c src/platform/autosave.c src/platform/log.c src/platform/platform.c"
 
 PASS=0
 FAIL=0
@@ -95,9 +95,12 @@ skenario "S01 nama kosong/terlalu panjang" tests/in_s01.txt "| Pemain : AAAAAAAA
 skenario "S02 input huruf pada menu" tests/in_s02.txt "Input tidak valid"
 skenario "S03 battle sampai menang" tests/in_s03.txt "Hadiah:"
 skenario "S04 battle sampai kalah" tests/in_s04.txt "Kamu dikalahkan"
+skenario "S18 kalah membuka layar game over" tests/in_s04.txt "Mulai ulang (reset run)"
 skenario "S05 gacha 10x gold kurang" tests/in_s05.txt "Gold kurang! Butuh 900 gold"
 skenario "S09 jual item" tests/in_s09.txt "Terjual:"
 
+# Slot 1 must not exist yet: otherwise the overwrite confirmation eats an input line.
+rm -f data/save_1.txt
 cp -f data/leaderboard.txt data/leaderboard.uji.bak
 skenario "S10 simpan-lanjutkan" tests/in_s10.txt "Selamat datang kembali, UjiSv!"
 skenario "S15 leaderboard tercatat" tests/in_s15.txt "Skor UjiSkr"
@@ -117,6 +120,7 @@ rmdir data/uji.bak 2>/dev/null
 skenario "S12 gerak ke tembok" tests/in_s12.txt "Tembok! Tidak bisa lewat."
 skenario "S13 hint gold kurang" tests/in_s13.txt "Gold kurang, hint butuh 30 gold"
 
+rm -f data/save_1.txt
 skenario "S16 seed dunia diminta saat game baru" tests/in_s16.txt "dibangun dari seed 777"
 hits=$(grep -c "dibangun dari seed 777" tests/out_last.txt)
 if [ "$hits" -eq 2 ]; then

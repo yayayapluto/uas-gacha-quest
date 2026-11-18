@@ -68,7 +68,7 @@ int lock_acquire(void)
         return 0;
     }
     SetFilePointer(lockHandle, 0, NULL, FILE_BEGIN);
-    ReadFile(lockHandle, buf, sizeof buf - 1, &read, NULL);
+    if (!ReadFile(lockHandle, buf, sizeof buf - 1, &read, NULL)) read = 0;
     buf[read < sizeof buf ? read : sizeof buf - 1] = '\0';
     previousRunning = strncmp(buf, "RUNNING", 7) == 0;
     {

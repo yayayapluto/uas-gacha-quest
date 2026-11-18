@@ -24,7 +24,10 @@ static void shopDraw(void *ctx, int sel)
 {
     ShopRow *rows = ctx;
     int i;
-    int cur = sel < 0 ? 0 : sel;  /* non-interactive draw passes -1 */
+    /* The menu has three rows but only two products: "Kembali" has no
+       ShopRow, so clamp the detail index instead of reading rows[2]. */
+    int cur = (sel >= 0 && sel < 2) ? sel : 0;
+    int back = sel == 2;
 
     ui_frame("Shop");
     ui_status_panel_at(rows[0].p, 2, 0, UI_COLS);
@@ -41,12 +44,19 @@ static void shopDraw(void *ctx, int sel)
         render_text_clipped(row, 2, UI_COLS - 4, st, "%s%-19s%9s%11s",
                             i == cur ? "> " : "  ", rows[i].name, priceText, stockText);
     }
-    render_text_clipped(15, 2, UI_COLS - 4, ST_TEXT, "0  Kembali");
+    render_text_clipped(15, 2, UI_COLS - 4, back ? ST_SELECTED : ST_TEXT,
+                        "0  Kembali");
 
     ui_panel(17, 0, UI_COLS, 5, "Detail");
-    render_text_clipped(18, 2, UI_COLS - 4, ST_ACCENT, "%s", rows[cur].name);
-    render_text_clipped(19, 2, UI_COLS - 4, ST_TEXT, "%s", rows[cur].desc);
-    render_text_clipped(20, 2, UI_COLS - 4, ST_GOLD, "%s", rows[cur].stat);
+    if (back) {
+        render_text_clipped(18, 2, UI_COLS - 4, ST_ACCENT, "Kembali");
+        render_text_clipped(19, 2, UI_COLS - 4, ST_TEXT, "Tutup shop dan kembali ke Hub.");
+        render_text_clipped(20, 2, UI_COLS - 4, ST_DIM, "Tekan Enter atau 0.");
+    } else {
+        render_text_clipped(18, 2, UI_COLS - 4, ST_ACCENT, "%s", rows[cur].name);
+        render_text_clipped(19, 2, UI_COLS - 4, ST_TEXT, "%s", rows[cur].desc);
+        render_text_clipped(20, 2, UI_COLS - 4, ST_GOLD, "%s", rows[cur].stat);
+    }
 
     /* the message panel is always drawn, so a refusal does not shift the list */
     ui_panel(22, 0, UI_COLS, 3, "Info");
@@ -63,18 +73,22 @@ typedef struct {
     int count;
 } SellCtx;
 
+/* 12 rows fit the panel; when the selection walks past them the list scrolls
+   with it instead of leaving the highlighted row off-screen. */
+#define SELL_ROWS 12
+
 static void sellDraw(void *ctx, int sel)
 {
     const SellCtx *c = ctx;
-    int i;
+    int i, top = sel >= SELL_ROWS ? sel - SELL_ROWS + 1 : 0;
 
     ui_frame("Jual Item");
     ui_panel(2, 0, UI_COLS, 14, "Inventory");
-    for (i = 0; i < c->count && i < 12; i++) {
-        int idx = c->rows[i];
+    for (i = 0; top + i < c->count && i < SELL_ROWS; i++) {
+        int idx = c->rows[top + i];
         const Item *it = &c->p->inventory[idx];
         int locked = idx == c->p->weaponIndex || idx == c->p->armorIndex;
-        Style st = (i == sel) ? ST_SELECTED : style_rarity(it->rarity);
+        Style st = (top + i == sel) ? ST_SELECTED : style_rarity(it->rarity);
         char nameBuf[MAX_NAME];
         char stats[40];
         /* names are padded by bytes, so a long one would shift the columns;
@@ -156,7 +170,7 @@ void shopMenu(Player *p)
                 set_message("Gold tidak cukup untuk membeli potion.");
                 break;
             }
-            amount = readInt("Jumlah potion yang dibeli (1-5): ", 1, maxBuy);
+            if (!readIntTry("Jumlah potion yang dibeli: ", 1, maxBuy, &amount)) break;
             p->gold -= amount * POTION_COST;
             p->potion += amount;
             set_message("Beli %d potion. Gold: %d, Potion: %d.", amount, p->gold, p->potion);
@@ -182,6 +196,14 @@ void shopMenu(Player *p)
             }
             {
                 int price = duplicatePrice(p->inventory[index].rarity);
+                char question[128];
+                ui_input_screen("Shop");
+                snprintf(question, sizeof question, "Jual %s seharga %d gold? (y/n): ",
+                         p->inventory[index].name, price);
+                if (!confirmPrompt(question)) {
+                    set_message("Penjualan dibatalkan.");
+                    break;
+                }
                 if (p->weaponIndex >= 0) oldWeaponId = p->inventory[p->weaponIndex].id;
                 if (p->armorIndex >= 0) oldArmorId = p->inventory[p->armorIndex].id;
                 p->gold += price;

@@ -98,9 +98,15 @@ static int writeSnapshotFile(const AutoSnapshot *snap)
 
     remove(AS_BAK);
     if (rename(AS_DATA, AS_BAK) != 0) {
-#ifdef _WIN32
+        FILE *stale = fopen(AS_DATA, "rb");
+        if (stale != NULL) {
+            /* the previous snapshot is still there, so the rotation failed for
+               a real reason; overwriting it now would lose the safety net */
+            fclose(stale);
+            setError("Autosave gagal: rotasi backup tidak bisa dilakukan.");
+            return 0;
+        }
         /* no previous file: rename failure is expected and harmless */
-#endif
     }
     if (!file_write_atomic(AS_DATA, buf, total)) {
         setError("Autosave gagal: tidak bisa menulis data/autosave.dat.");

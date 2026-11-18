@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include "config.h"
 #include "util.h"
 #include "ui.h"
+#include "caps.h"
+#include "term.h"
 
 /* Reads one line from stdin; returns 1 when data is available, 0 on EOF. */
 int readLine(char *buf, int max)
@@ -13,7 +16,16 @@ int readLine(char *buf, int max)
     return 1;
 }
 
-int readInt(const char *prompt, int min, int max)
+/* Line reader that honours Esc in interactive mode. Returns 1 for a line,
+   0 for EOF, -1 when the player pressed Esc. */
+int readLineEsc(char *buf, int max)
+{
+    if (!caps_interactive()) return readLine(buf, max) ? 1 : 0;
+    return ui_line_read(buf, max);
+}
+
+/* Returns 1 when a value was entered, 0 on Esc or EOF (out is then min). */
+int readIntTry(const char *prompt, int min, int max, int *out)
 {
     char buf[256];
     char *end;
@@ -22,9 +34,17 @@ int readInt(const char *prompt, int min, int max)
     ui_line_begin("%s", prompt);
     for (;;) {
         ui_line_prompt();
-        if (!readLine(buf, sizeof buf)) {
-            ui_line_error("Input berakhir (EOF), memakai nilai %d.", min);
-            break;
+        {
+            int st = readLineEsc(buf, sizeof buf);
+            if (st < 0) {
+                ui_line_end();
+                *out = min;
+                return 0;
+            }
+            if (st == 0) {
+                ui_line_error("Input berakhir (EOF), memakai nilai %d.", min);
+                break;
+            }
         }
         value = strtol(buf, &end, 10);
         if (end == buf) {
@@ -41,22 +61,40 @@ int readInt(const char *prompt, int min, int max)
             continue;
         }
         ui_line_end();
-        return (int)value;
+        *out = (int)value;
+        return 1;
     }
     ui_line_end();
-    return min;
+    *out = min;
+    return 0;
 }
 
-void readString(const char *prompt, char *out, int max)
+int readInt(const char *prompt, int min, int max)
+{
+    int value = min;
+    readIntTry(prompt, min, max, &value);
+    return value;
+}
+
+/* Returns 1 when text was entered, 0 on Esc or EOF (out is then empty). */
+int readStringTry(const char *prompt, char *out, int max)
 {
     char buf[256];
+
     out[0] = '\0';
     ui_line_begin("%s", prompt);
     for (;;) {
         ui_line_prompt();
-        if (!readLine(buf, sizeof buf)) {
-            ui_line_error("Input berakhir (EOF).");
-            break;
+        {
+            int st = readLineEsc(buf, sizeof buf);
+            if (st < 0) {
+                ui_line_end();
+                return 0;
+            }
+            if (st == 0) {
+                ui_line_error("Input berakhir (EOF).");
+                break;
+            }
         }
         if (buf[0] == '\0') {
             ui_line_error("Input tidak boleh kosong.");
@@ -64,9 +102,26 @@ void readString(const char *prompt, char *out, int max)
         }
         strncpy(out, buf, (size_t)max - 1);
         out[max - 1] = '\0';
-        break;
+        ui_line_end();
+        return 1;
     }
     ui_line_end();
+    return 0;
+}
+
+void readString(const char *prompt, char *out, int max)
+{
+    readStringTry(prompt, out, max);
+}
+
+/* y/n confirmation. Interactive screens get an inline box at the bottom so the
+   current screen is not replaced. Piped input keeps the line-based prompt. */
+int confirmPrompt(const char *prompt)
+{
+    char answer[MAX_NAME];
+    if (caps_interactive()) return ui_confirm_box(prompt);
+    if (!readStringTry(prompt, answer, MAX_NAME)) return 0;
+    return answer[0] == 'y' || answer[0] == 'Y';
 }
 
 void clearScreen(void)

@@ -380,8 +380,24 @@ Hadiah: +10 EXP, +15 gold, +10 skor.
 
 ```
 Kamu dikalahkan oleh Slime...
-Gold tinggal 107, HP dipulihkan penuh. Kembali ke hub.
 ```
+
+Lalu layar game over langsung muncul tanpa perlu menekan Enter:
+
+```
++GAME OVER---------------------------------------+
+| Kamu kalah di pertempuran.                     |
+| Pemain : farras (level 1, skor 0)              |
+| Gold   : 107   Potion: 0   Item: 0             |
+| Reset mengembalikan level, gold, dan item ke awal run.
++------------------------------------------------+
+  1. Mulai ulang (reset run)
+  2. Kembali ke menu utama
+```
+
+Pilihan 1 mereset level, HP, gold, potion, dan inventory ke nilai awal run
+(nama dan seed tetap), lalu kembali ke hub. Pilihan 2 meninggalkan run dan
+kembali ke menu utama. HP tidak pernah dipulihkan diam-diam.
 
 Naik level (pesan di hub):
 
@@ -577,25 +593,29 @@ Indeks tidak ada di inventory.
 ## 10. Status
 
 ```
-+STATUS------------------------------------------+
+GACHA QUEST > Status
+--------------------------------------------------
++Status------------------------------------------+
 | Pemain : farras                                |
 | Level  : 1 (Skor 0)                            |
-| HP [##########] 100/100                        |
+| HP  #################################  100/100 |
 | Gold   : 200   Potion: 2                       |
 +------------------------------------------------+
-+DETAIL------------------------------------------+
++STATISTIK & PERLENGKAPAN------------------------+
 | Level      : 1 (EXP 0/50)                      |
-| ATK        : 10                                |
-| DEF        : 3                                 |
-| Potion     : 2                                 |
-| Pity       : 0/10                              |
-| Total pull : 0                                 |
+|  ------------------------------------------    |
+| ATK        : 10   DEF: 3                       |
+| Potion     : 2   Pity: 0/10                    |
+| Total pull : 0   Item: 0/36                    |
 | Seed dunia : 1794728246                        |
-| Item       : 0/36                              |
+| Senjata: -                                     |
+| Armor  : -                                     |
 +------------------------------------------------+
+Tekan tombol apa saja untuk kembali
 ```
 
-Baris senjata & armor terpasang (di bawah box):
+Satu panel untuk statistik dan perlengkapan, total 20 baris, supaya tidak
+terpotong di terminal 24 baris. Baris senjata & armor terpasang:
 
 ```
 Senjata: Storm Hammer (power 22)
@@ -639,7 +659,7 @@ maksimum 25x15 dan minimum 11x7.)
 | HP 100/100                                     |
 | ####################        seed 12345         |
 +------------------------------------------------+
-Area awal tersambung dari titik awal sampai ujung koridor (DFS).
+Area awal tersambung dari titik awal sampai isi terjauh (DFS).
 
 Isi chunk (roll per 16x16, dari seed):
 

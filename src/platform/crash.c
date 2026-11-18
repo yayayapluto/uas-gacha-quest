@@ -2,8 +2,20 @@
 
 #ifdef _WIN32
 
+#include <windows.h>
+#include "log.h"
+
+static LONG WINAPI fatalFilter(EXCEPTION_POINTERS *ep)
+{
+    log_crash("exception code=0x%08lX addr=%p",
+              (unsigned long)ep->ExceptionRecord->ExceptionCode,
+              ep->ExceptionRecord->ExceptionAddress);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
 void crash_install(void)
 {
+    SetUnhandledExceptionFilter(fatalFilter);
 }
 
 #else

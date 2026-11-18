@@ -20,7 +20,7 @@ static int interactive = 0;
 static int cols = 80, rows = 24;
 
 static const Glyphs glyphsUnicode = {
-    "\xE2\x94\x8C", "\xE2\x94\x90", "\xE2\x94\x94", "\xE2\x94\x98", /* ┌ ┐ └ ┘ */
+    "\xE2\x95\xAD", "\xE2\x95\xAE", "\xE2\x95\xB0", "\xE2\x95\xAF", /* ╭ ╮ ╰ ╯ */
     "\xE2\x94\x80", "\xE2\x94\x82",                                 /* ─ │ */
     "\xE2\x96\x88", "\xE2\x96\x91",                                 /* █ ░ */
     "\xE2\x96\xB8 ",                                                /* ▸+space */

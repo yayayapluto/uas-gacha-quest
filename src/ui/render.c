@@ -11,6 +11,7 @@
 static Cell grid[GRID_MAX_ROWS][GRID_MAX_COLS];
 static char outBuf[32 * 1024];
 static int maxUsedRow = -1;
+static int prevUsedRow = -1;
 
 /* visible column width of a UTF-8 string: ANSI escapes skipped, 1 col per codepoint */
 int ui_visible_len(const char *s)
@@ -200,7 +201,10 @@ void render_flush(void)
             fflush(stdout);
             return;
         }
-        n += (size_t)sprintf(outBuf + n, "\033[H\033[2J");
+        /* No full-screen clear: every row is rewritten and erased to the end.
+           Clearing the whole screen on every animation frame made the bottom
+           Status panel flash. */
+        n += (size_t)sprintf(outBuf + n, "\033[H");
     }
 
     for (r = 0; r <= maxRow; r++) {
@@ -221,7 +225,7 @@ void render_flush(void)
             if (interactive) {
                 if (!started || cur != cell->st) {
                     n += (size_t)sprintf(outBuf + n, "\033[0m");
-                    if (cell->st >= ST_BIOME_BASE && cell->st < ST_BIOME_BASE + BIOME_COUNT) {
+                    if (cell->st >= ST_BIOME_BASE && cell->st < ST_HP_GRAD_BASE) {
                         /* biome cells carry their own background, so a wall
                            reads as a solid block instead of a lone glyph */
                         n += (size_t)sprintf(outBuf + n, "%s", style_bg(cell->st));
@@ -248,11 +252,18 @@ void render_flush(void)
             n += (size_t)len;
         }
         if (started || interactive) {
-            if (interactive) n += (size_t)sprintf(outBuf + n, "\033[0m");
+            if (interactive) n += (size_t)sprintf(outBuf + n, "\033[0m\033[K");
             if (!interactive) outBuf[n++] = '\n';
         }
         if (n > sizeof outBuf - 64) break;
     }
+    if (interactive && prevUsedRow > maxRow) {
+        for (r = maxRow + 1; r <= prevUsedRow && r < GRID_MAX_ROWS; r++) {
+            n += (size_t)sprintf(outBuf + n, "\033[%d;1H\033[2K", r + 1);
+            if (n > sizeof outBuf - 64) break;
+        }
+    }
+    prevUsedRow = maxRow;
     if (n > 0) {
         fwrite(outBuf, 1, n, stdout);
         fflush(stdout);

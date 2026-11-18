@@ -6,6 +6,8 @@
 #include "ui.h"
 #include "render.h"
 #include "atomicfile.h"
+#include "caps.h"
+#include "term.h"
 
 /* Reads the item catalog; returns how many items were loaded. */
 int loadCatalog(const char *file, Item items[])
@@ -314,10 +316,12 @@ void showLeaderboard(void)
     char buf[96];
 
     ui_frame("Leaderboard");
-    ui_panel(2, 0, 50, 9, "Leaderboard (Top 5)");
+    ui_panel(2, 0, UI_COLS, TOP_DISPLAY + 3, "Leaderboard (Top 5)");
+    render_text_clipped(3, 2, UI_COLS - 4, ST_DIM, "%-4s %-15s %5s %6s",
+                        "#", "Nama", "Level", "Skor");
 
     if (fp == NULL) {
-        render_text(3, 2, ST_DANGER, "Belum ada data leaderboard.");
+        render_text(4, 2, ST_DANGER, "Belum ada data leaderboard.");
     } else {
         while (rank < TOP_DISPLAY && fgets(line, sizeof line, fp) != NULL) {
             Style st;
@@ -326,16 +330,27 @@ void showLeaderboard(void)
             else if (rank == 1) st = ST_RARITY_COMMON;
             else if (rank == 2) st = ST_BRONZE;
             else st = ST_TEXT;
-            row = 3 + rank;
-            snprintf(buf, sizeof buf, "%d. %-15s level %2d skor %d", rank + 1, name, level, score);
-            render_text(row, 2, st, "%s", buf);
+            row = 4 + rank;
+            /* %-15.15s keeps long names inside their column instead of
+               pushing the level and score out of line */
+            snprintf(buf, sizeof buf, "%-4d %-15.15s %5d %6d", rank + 1, name, level, score);
+            render_text_clipped(row, 2, UI_COLS - 4, st, "%s", buf);
             rank++;
         }
         fclose(fp);
         if (rank == 0)
-            render_text(3, 2, ST_DANGER, "Belum ada data leaderboard.");
+            render_text(4, 2, ST_DANGER, "Belum ada data leaderboard.");
     }
 
-    ui_footer(NULL);
+    ui_footer_line("Tekan tombol apa saja untuk kembali");
     ui_flush();
+    /* info screen: any key returns, no extra confirmation step in the menu */
+    if (caps_interactive()) {
+        char ch;
+        for (;;) {
+            TermKey k = term_getkey(&ch);
+            if (k == KEY_NONE || k == KEY_RESIZE) continue;
+            break;
+        }
+    }
 }

@@ -9,6 +9,8 @@
 #include "autosave.h"
 
 #define INV_NAME_COLS 17
+#define INV_VISIBLE_ROWS 4
+#define INV_PICK_ROWS 12   /* rows the item picker can show at once */
 
 static void inventoryDraw(void *ctx, int sel)
 {
@@ -21,12 +23,16 @@ static void inventoryDraw(void *ctx, int sel)
     ui_frame("Inventory");
     ui_status_panel_at(p, 2, 0, UI_COLS);
 
-    snprintf(buf, sizeof buf, "Inventory (%d/%d)", p->itemCount, MAX_ITEM);
+    if (p->itemCount > INV_VISIBLE_ROWS)
+        snprintf(buf, sizeof buf, "Inventory (%d/%d) - %d tampil, lainnya lewat Equip",
+                 p->itemCount, MAX_ITEM, INV_VISIBLE_ROWS);
+    else
+        snprintf(buf, sizeof buf, "Inventory (%d/%d)", p->itemCount, MAX_ITEM);
     ui_panel(8, 0, UI_COLS, 9, buf);
     render_text_clipped(9, 2, UI_COLS - 4, ST_DIM,
                         "%-4s %-17s %-4s %-9s %s",
                         "Idx", "Nama", "Tipe", "Rarity", "Power");
-    for (i = 0, row = 10; i < p->itemCount && i < 6; i++, row++) {
+    for (i = 0, row = 10; i < p->itemCount && i < INV_VISIBLE_ROWS; i++, row++) {
         char eq[8];
         char name[INV_NAME_COLS + 1];
         snprintf(eq, sizeof eq, "%d%s", i,
@@ -44,8 +50,64 @@ static void inventoryDraw(void *ctx, int sel)
                             p->inventory[i].power);
     }
 
+    /* search hits and equip results land in the log; show the last two so the
+       player sees what the action did without leaving the screen */
+    {
+        int start = ui_log_count() > 2 ? ui_log_count() - 2 : 0;
+        int logRow = 10 + INV_VISIBLE_ROWS;
+        for (i = start; i < ui_log_count(); i++, logRow++)
+            render_text_clipped(logRow, 2, UI_COLS - 4, ui_log_style_at(i), "%s",
+                                ui_log_text(i));
+    }
     ui_menu_v(18, 0, items, nums, 4, sel);
+    ui_message(17);
     ui_footer(NULL);
+}
+
+static const char *rarityLabel(int rarity)
+{
+    if (rarity == RARITY_RARE) return "Rare";
+    if (rarity == RARITY_EPIC) return "Epic";
+    if (rarity == RARITY_LEGENDARY) return "Legendary";
+    return "Common";
+}
+
+/* Item picker: the whole inventory scrolls, so slot 20 is as easy to equip as
+   slot 0 instead of typing an index blind off a four-row preview. */
+typedef struct {
+    const Player *p;
+    int count;
+} EquipCtx;
+
+static void equipDraw(void *ctx, int sel)
+{
+    const EquipCtx *c = ctx;
+    int i, top = sel >= INV_PICK_ROWS ? sel - INV_PICK_ROWS + 1 : 0;
+
+    ui_frame("Equip Item");
+    ui_panel(2, 0, UI_COLS, INV_PICK_ROWS + 3, "Pilih item");
+    render_text_clipped(3, 2, UI_COLS - 4, ST_DIM, "%-4s %-17s %-4s %-9s %5s",
+                        "Idx", "Nama", "Tipe", "Rarity", "Power");
+    for (i = 0; i < INV_PICK_ROWS && top + i < c->count; i++) {
+        int idx = top + i;
+        const Item *it = &c->p->inventory[idx];
+        char name[INV_NAME_COLS + 1];
+        memcpy(name, it->name, INV_NAME_COLS);
+        name[INV_NAME_COLS] = '\0';
+        render_text_clipped(4 + i, 2, UI_COLS - 4,
+                            idx == sel ? ST_SELECTED : style_rarity(it->rarity),
+                            "%-4d %-17s %-4c %-9s %5d", idx, name, it->type,
+                            rarityLabel(it->rarity), it->power);
+    }
+    ui_footer_line("Panah pilih   Enter pasang   Esc batal");
+}
+
+static int pickEquipItem(const Player *p)
+{
+    EquipCtx c;
+    c.p = p;
+    c.count = p->itemCount;
+    return ui_pick_row(p->itemCount, equipDraw, &c);
 }
 
 void syncEquipped(Player *p, int oldWeaponId, int oldArmorId)
@@ -92,12 +154,8 @@ void inventoryMenu(Player *p)
                 set_message("Inventory kosong.");
                 break;
             }
-            index = readInt("Nomor indeks item yang dipasang (999 batal): ", 0, 999);
-            if (index == 999) break;
-            if (index >= p->itemCount) {
-                set_message("Indeks tidak ada di inventory.");
-                break;
-            }
+            index = pickEquipItem(p);
+            if (index < 0) break;
             equipItem(p, index);
             set_message("%s dipasang.", p->inventory[index].name);
             autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);

@@ -11,12 +11,69 @@
 #include "rng.h"
 #include "platform.h"
 #include "autosave.h"
+#include "player.h"
 
 typedef struct {
     const Player *p;
     const Monster *enemy;
     int enemyHp;
 } BattleCtx;
+
+/* Set when the player picks "menu utama" on the game-over screen; the hub loop
+   reads it and hands control back to the main menu instead of the next hub frame. */
+static int runAborted;
+static int runEnded;
+
+int battleRunAborted(void)
+{
+    return runAborted;
+}
+
+void battleClearRunAbort(void)
+{
+    runAborted = 0;
+}
+
+int battleRunEnded(void)
+{
+    return runEnded;
+}
+
+void battleClearRunEnded(void)
+{
+    runEnded = 0;
+}
+
+/* Game-over screen: the run is over, so the player chooses between a fresh
+   reset and leaving for the main menu. HP is never refilled behind the menu. */
+static void gameOverDraw(void *ctx, int sel)
+{
+    static const char *items[] = { "Mulai ulang (reset run)", "Kembali ke menu utama" };
+    static const int nums[] = { 1, 2 };
+    const Player *p = ctx;
+
+    ui_frame("GAME OVER");
+    ui_panel(2, 0, UI_COLS, 7, "GAME OVER");
+    render_text(3, 2, ST_DANGER, "Kamu kalah di pertempuran.");
+    render_text(4, 2, ST_TEXT, "Pemain : %s (level %d, skor %d)", p->name, p->level, p->score);
+    render_text(5, 2, ST_TEXT, "Gold   : %d   Potion: %d   Item: %d",
+                p->gold, p->potion, p->itemCount);
+    render_text(6, 2, ST_DIM, "Reset mengembalikan level, gold, dan item ke awal run.");
+    ui_menu_v(10, 0, items, nums, 2, sel);
+    ui_message(14);
+}
+
+static int gameOverScreen(Player *p)
+{
+    static const char *items[] = { "Mulai ulang (reset run)", "Kembali ke menu utama" };
+    static const int nums[] = { 1, 2 };
+    return ui_menu_pick(items, nums, 2, 1, 2, gameOverDraw, p);
+}
+
+int battleGameOverScreen(Player *p)
+{
+    return gameOverScreen(p);
+}
 
 int calculateDamage(int atk, int def)
 {
@@ -25,14 +82,20 @@ int calculateDamage(int atk, int def)
     return base + plat_rand() % 4;
 }
 
+/* Single source of the crit rule: callers that need raw damage reuse this. */
+static int rollCrit(int dmg, int *critical)
+{
+    *critical = 0;
+    if (plat_rand() % 100 < CRIT_CHANCE) {
+        *critical = 1;
+        dmg *= CRIT_MULTIPLIER;
+    }
+    return dmg;
+}
+
 int attack(const char *from, const char *to, int atk, int targetDef, int *targetHp, int *critical)
 {
-    int dmg = calculateDamage(atk, targetDef);
-    *critical = 0;
-    if (plat_rand() % 100 < 10) {
-        dmg *= 2;
-        *critical = 1;
-    }
+    int dmg = rollCrit(calculateDamage(atk, targetDef), critical);
     *targetHp -= dmg;
     {
         char dmgText[40];
@@ -116,6 +179,10 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
                 ui_log_style(ST_SUCCESS, "%s menang!", p->name);
                 ui_log_style(ST_TEXT, "Hadiah: +%d EXP, +%d gold, +%d skor.",
                              enemy.exp, enemy.gold, enemy.exp);
+                /* the hub has no log panel, so the reward must also land in the
+                   message row or the win goes by unseen */
+                set_message("Menang! +%d EXP, +%d gold, +%d skor.",
+                            enemy.exp, enemy.gold, enemy.exp);
                 addExp(p, enemy.exp);
                 p->gold += enemy.gold;
                 p->score += enemy.exp;
@@ -127,10 +194,9 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
         case 2: {
             int dmg;
             ui_log_event(p->name, "bertahan", NULL, NULL, ST_ACCENT, ST_TEXT, ST_TEXT);
-            dmg = calculateDamage(enemy.atk, totalDef(p));
+            dmg = rollCrit(calculateDamage(enemy.atk, totalDef(p)), &critical);
             {
                 char dmgText[40];
-                if (plat_rand() % 100 < 10) dmg *= 2;
                 snprintf(dmgText, sizeof dmgText, "%d damage", dmg);
                 ui_log_event(enemy.name, "menyerang", p->name, dmgText,
                              ST_DANGER, ST_ACCENT, ST_GOLD);
@@ -147,7 +213,7 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
                 break;
             }
             p->potion--;
-            p->hp += 50;
+            p->hp += POTION_HEAL;
             if (p->hp > p->maxHp) p->hp = p->maxHp;
             {
                 char hpText[40];
@@ -160,6 +226,7 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
         case 4:
             if (plat_rand() % 2 == 0) {
                 ui_log_style(ST_SUCCESS, "Kabur berhasil! Battle selesai tanpa hadiah.");
+                set_message("Kabur berhasil. Battle selesai tanpa hadiah.");
                 alive = 0;
             } else {
                 ui_log_style(ST_DANGER, "Kabur gagal!");
@@ -169,25 +236,30 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
         }
 
         if (p->hp <= 0) {
+            p->hp = 0;
             ui_log_event("Kamu dikalahkan oleh", enemy.name, NULL, "...",
                          ST_TEXT, ST_DANGER, ST_TEXT);
-            p->gold /= 2;
-            p->hp = p->maxHp;
-            ui_log_style(ST_GOLD, "Gold tinggal %d, HP dipulihkan penuh. Kembali ke hub.", p->gold);
+            bc.enemyHp = enemyHp;
+            battleDraw(&bc, -1);
+            ui_flush();
+            runEnded = 1;
+            if (gameOverScreen(p) == 1) {
+                resetPlayer(p);
+                set_message("Run direset. Level, gold, dan item kembali ke awal.");
+            } else {
+                runAborted = 1;
+            }
             alive = 0;
         }
         if (alive) {
             bc.enemyHp = enemyHp;
-            battleDraw(&bc, -1);
             autosave_publish(p, AS_SCREEN_BATTLE, &enemy, enemyHp, NULL, 0, 0, 0);
-            ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
-            if (platform_shutdown_requested()) break;
         }
     }
     if (!platform_shutdown_requested())
-        autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
-    ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
-    set_message("");
+        autosave_publish(p, runAborted ? AS_SCREEN_MENU : AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
+    if (last_message()[0] == '\0' && !runAborted)
+        set_message("Battle selesai.");
 }
 
 void startBattle(Player *p, const Monster m[], int count)
