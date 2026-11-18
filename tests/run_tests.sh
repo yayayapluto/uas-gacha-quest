@@ -16,7 +16,7 @@ CFLAGS="-std=c11 -Wall -Wextra -Wpedantic"
 INC="-Isrc/core -Isrc/util -Isrc/ui -Isrc/player -Isrc/battle -Isrc/gacha -Isrc/inventory -Isrc/shop -Isrc/storage -Isrc/dungeon -Isrc/platform"
 CFLAGS="$CFLAGS $INC"
 SAN="${1:-}"
-LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c src/ui/render.c src/ui/widgets.c src/platform/rng.c src/platform/atomicfile.c src/platform/lock.c src/platform/sig.c src/platform/crash.c src/platform/autosave.c src/platform/platform.c"
+LIB="src/player/player.c src/battle/battle.c src/gacha/gacha.c src/inventory/inventory.c src/shop/shop.c src/storage/storage.c src/dungeon/dungeon.c src/util/util.c src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c src/ui/render.c src/ui/widgets.c src/platform/rng.c src/platform/atomicfile.c src/platform/lock.c src/platform/sig.c src/platform/crash.c src/platform/autosave.c src/platform/log.c src/platform/platform.c"
 
 PASS=0
 FAIL=0

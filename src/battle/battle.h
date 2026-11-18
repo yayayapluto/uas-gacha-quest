@@ -15,5 +15,8 @@ void battleClearRunAbort(void);
 /* 1 when the last battle ended the run (defeat), so callers can stop the run. */
 int battleRunEnded(void);
 void battleClearRunEnded(void);
+/* Game-over choice for encounters that resolve inside another screen.
+   Returns 1 when the player chose a fresh run, 0 when leaving to the menu. */
+int battleGameOverScreen(Player *p);
 
 #endif

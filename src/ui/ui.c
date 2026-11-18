@@ -225,6 +225,11 @@ void ui_hp_bar(int row, int col, int w, int hp, int maxHp)
     widget_hp_bar(row, col, w, hp, maxHp);
 }
 
+void ui_hp_bar_n(int row, int col, int w, int hp, int maxHp)
+{
+    widget_hp_bar_n(row, col, w, hp, maxHp);
+}
+
 void ui_bar(int row, int col, int w, int cur, int max, Style fill)
 {
     widget_bar(row, col, w, cur, max, fill);
@@ -243,6 +248,11 @@ void ui_menu_h(int row, int col, const char *const *items, const int *nums, int 
 void ui_footer(const char *extra)
 {
     widget_footer(extra);
+}
+
+void ui_footer_line(const char *text)
+{
+    widget_footer_line(text);
 }
 
 void ui_message(int row)
@@ -270,30 +280,6 @@ void ui_status_panel_at(const Player *p, int row, int col, int w)
     render_text(row + 4, col + 2 + 9, ST_GOLD, "%s", num);
     off = 2 + 9 + ui_visible_len(num);
     render_text(row + 4, col + off, ST_TEXT, "   Potion: %d", p->potion);
-}
-
-void ui_wait_enter(const char *text)
-{
-    if (!caps_interactive()) {
-        char buf[16];
-        if (!isatty(fileno(stdin))) return;
-        printf("\033[1;36m%s%s", text, ANSI_RESET);
-        fflush(stdout);
-        if (!readLine(buf, sizeof buf)) clearerr(stdin);
-        return;
-    }
-    {
-        char ch;
-        /* the pause hint must be readable: it is the only clue that arrow
-           keys do nothing until Enter is pressed */
-        render_text(render_max_row() + 2, 0, ST_ACCENT, "%s", text);
-        ui_flush();
-        for (;;) {
-            TermKey k = term_getkey(&ch);
-            if (k == KEY_ENTER || k == KEY_ESC) break;
-            if (k == KEY_EOF) break;
-        }
-    }
 }
 
 /* Fallback: identical text to the old screens (items, message, prompt). */
@@ -376,30 +362,256 @@ int ui_menu_pick(const char *const *items, const int *nums, int n,
     }
 }
 
+/* Inline confirmation: keep the screen behind it and add one box at the
+   bottom. The answer is chosen with Y/N, then confirmed with Enter so a
+   buffered newline cannot leak into the next menu. */
+int ui_confirm_box(const char *question)
+{
+    char qRows[3][192];
+    int cols, termRows, contentW, qCount, height, top, i;
+    int picked = -1;
+
+    if (!caps_interactive()) return 0;
+    cols = caps_cols();
+    if (cols > UI_COLS) cols = UI_COLS;
+    termRows = caps_rows();
+    contentW = cols - 4;
+    if (contentW < 8) contentW = 8;
+    qCount = wrap_teks(question, contentW, qRows, 3);
+    if (qCount < 1) qCount = 1;
+    height = qCount + 3;
+
+    top = termRows - height - 1;
+    if (top < 2) top = 2;
+
+    ui_panel(top, 0, cols, height, "Konfirmasi");
+    {
+        int r, c;
+        for (r = 1; r < height - 1; r++)
+            for (c = 1; c < cols - 1; c++)
+                render_text(top + r, c, ST_TEXT, " ");
+    }
+    for (i = 0; i < qCount; i++)
+        render_text_clipped(top + 1 + i, 2, contentW, ST_TEXT, "%s", qRows[i]);
+    render_text_clipped(top + 1 + qCount, 2, contentW, ST_DIM,
+                        "[Y] Ya   [N] Tidak   Esc Batal");
+    ui_flush();
+
+    while (picked < 0) {
+        char ch;
+        TermKey k = term_getkey(&ch);
+        if (k == KEY_EOF || k == KEY_ESC) return 0;
+        if (k == KEY_RESIZE) continue;
+        if (k != KEY_CHAR) continue;
+        if (ch == 'y' || ch == 'Y') picked = 1;
+        else if (ch == 'n' || ch == 'N') picked = 0;
+    }
+
+    render_text_clipped(top + 1 + qCount, 2, contentW, ST_ACCENT,
+                        "Pilihan: %s. Enter untuk lanjut, Esc batal.",
+                        picked ? "Ya" : "Tidak");
+    ui_flush();
+
+    for (;;) {
+        char ch;
+        TermKey k = term_getkey(&ch);
+        if (k == KEY_EOF || k == KEY_ESC) return 0;
+        if (k == KEY_ENTER) return picked;
+        if (k == KEY_CHAR && (ch == '\r' || ch == '\n')) return picked;
+    }
+}
+
 static char inputScreen[64] = "Input";
 static char inputPrompt[192];
-static int promptRow, promptCol;
+static char inputBuf[256];
+static char inputNote[192];
+static Style inputNoteStyle = ST_DANGER;
+static int inputCursorRow, inputCursorCol;
+#define INPUT_MAX_ROWS 8
+
+/* Byte length of the UTF-8 codepoint starting at s (>=1; clamped to n). */
+static int cpLenAt(const char *s, int n)
+{
+    unsigned char c = (unsigned char)s[0];
+    int len = 1;
+
+    if ((c & 0xE0) == 0xC0) len = 2;
+    else if ((c & 0xF0) == 0xE0) len = 3;
+    else if ((c & 0xF8) == 0xF0) len = 4;
+    while (len > 1 && (len > n || ((unsigned char)s[len - 1] & 0xC0) != 0x80)) len--;
+    return len;
+}
+
+/* Display columns of n bytes: CJK/Hangul/fullwidth/emoji take two cells. */
+static int widthOfBytes(const char *s, int n)
+{
+    int w = 0, i = 0;
+
+    while (i < n) {
+        unsigned char c = (unsigned char)s[i];
+        unsigned int cp;
+        int len = cpLenAt(s + i, n - i);
+        int j;
+
+        if (c < 0x80) {
+            cp = c;
+        } else {
+            cp = c & (len == 2 ? 0x1Fu : len == 3 ? 0x0Fu : 0x07u);
+            for (j = 1; j < len; j++)
+                cp = (cp << 6) | ((unsigned int)s[i + j] & 0x3Fu);
+        }
+        if (cp >= 0x0300 && cp <= 0x036F) {
+            /* combining mark: no column of its own */
+        } else if ((cp >= 0x1100 && cp <= 0x115F)
+                   || (cp >= 0x2E80 && cp <= 0xA4CF)
+                   || (cp >= 0xAC00 && cp <= 0xD7A3)
+                   || (cp >= 0xF900 && cp <= 0xFAFF)
+                   || (cp >= 0xFE30 && cp <= 0xFE4F)
+                   || (cp >= 0xFF00 && cp <= 0xFF60)
+                   || (cp >= 0xFFE0 && cp <= 0xFFE6)
+                   || (cp >= 0x1F300 && cp <= 0x1FAFF)
+                   || cp >= 0x20000) {
+            w += 2;
+        } else {
+            w += 1;
+        }
+        i += len;
+    }
+    return w;
+}
+
+int lebar_tampil(const char *s)
+{
+    return s == NULL ? 0 : widthOfBytes(s, (int)strlen(s));
+}
+
+/* Splits text into at most maxRows lines of at most width columns, breaking
+   on spaces. A single word wider than the line is split on the column budget,
+   so nothing is dropped. Returns the row count. */
+int wrap_teks(const char *text, int width, char rows[][192], int maxRows)
+{
+    const char *p = text != NULL ? text : "";
+    int used = 1;
+
+    if (width < 1 || maxRows <= 0) return 0;
+    rows[0][0] = '\0';
+    while (*p != '\0') {
+        const char *w;
+        int wordLen, off = 0, curW;
+
+        while (*p == ' ') p++;
+        if (*p == '\0') break;
+        w = p;
+        while (*p != '\0' && *p != ' ') p++;
+        wordLen = (int)(p - w);
+        curW = lebar_tampil(rows[used - 1]);
+
+        if (curW > 0 && curW + 1 + widthOfBytes(w, wordLen) <= width) {
+            snprintf(rows[used - 1] + curW, 192 - (size_t)curW, " %.*s", wordLen, w);
+            continue;
+        }
+        if (curW > 0) {
+            if (used >= maxRows) break;
+            used++;
+            rows[used - 1][0] = '\0';
+        }
+        while (off < wordLen) {
+            int take = 0, tw = 0;
+            while (off + take < wordLen) {
+                int cl = cpLenAt(w + off + take, wordLen - off - take);
+                int cw = widthOfBytes(w + off + take, cl);
+                if (tw + cw > width) break;
+                tw += cw;
+                take += cl;
+            }
+            if (take == 0) take = cpLenAt(w + off, wordLen - off);
+            if (take > wordLen - off) take = wordLen - off;
+            snprintf(rows[used - 1], 192, "%.*s", take, w + off);
+            off += take;
+            if (off < wordLen) {
+                if (used >= maxRows) return used;
+                used++;
+                rows[used - 1][0] = '\0';
+            }
+        }
+    }
+    return used;
+}
+
+/* Input box: header at the top, boxed prompt directly under it, so the
+   question never floats away from the title. Content width comes from the
+   terminal at render time, so a resize re-wraps instead of pushing text over
+   the border. */
+void render_input_box(const char *question, const char *buffer)
+{
+    int cols = caps_interactive() ? caps_cols() : UI_COLS;
+    int termRows = caps_interactive() ? caps_rows() : UI_ROWS;
+    int pad = cols < 20 ? 0 : 1;
+    int contentW = cols - 2 - 2 * pad;
+    int prefixW = 2;                               /* "> " */
+    char qRows[INPUT_MAX_ROWS][192];
+    char nRows[INPUT_MAX_ROWS][192];
+    int qCount = 0, nCount = 0, height, top, i;
+    int avail, bufW, shownW = 0, off = 0;
+    const char *shown;
+
+    if (contentW < 4) contentW = 4;
+    memset(qRows, 0, sizeof qRows);
+    memset(nRows, 0, sizeof nRows);
+    qCount = wrap_teks(question, contentW, qRows, INPUT_MAX_ROWS);
+    if (inputNote[0] != '\0')
+        nCount = wrap_teks(inputNote, contentW, nRows, INPUT_MAX_ROWS);
+
+    height = qCount + nCount + 1 + 2;
+    top = 2;                       /* first row under the header line */
+    if (top + height > termRows) top = termRows - height;
+    if (top < 2) top = 2;
+
+    ui_frame(inputScreen);
+
+    ui_panel(top, 0, cols, height, "Input");
+    for (i = 0; i < qCount; i++)
+        render_text_clipped(top + 1 + i, 1 + pad, contentW, ST_TEXT, "%s", qRows[i]);
+    for (i = 0; i < nCount; i++)
+        render_text_clipped(top + 1 + qCount + i, 1 + pad, contentW, inputNoteStyle,
+                            "%s", nRows[i]);
+
+    /* horizontal scroll: show the rightmost part that still leaves the cursor
+       on screen */
+    /* one column is kept free for the cursor, so it never sits on the border */
+    avail = contentW - prefixW - 1;
+    if (avail < 1) avail = 1;
+    bufW = lebar_tampil(buffer);
+    shown = buffer;
+    while (buffer[off] != '\0' && bufW - shownW > avail) {
+        int adv = cpLenAt(buffer + off, (int)strlen(buffer) - off);
+        shownW += widthOfBytes(buffer + off, adv);
+        off += adv;
+        shown = buffer + off;
+    }
+    render_text(top + 1 + qCount + nCount, 1 + pad, ST_ACCENT, "%s", "> ");
+    render_text_clipped(top + 1 + qCount + nCount, 1 + pad + prefixW, avail, ST_TEXT,
+                        "%s", shown);
+
+    inputCursorRow = top + 1 + qCount + nCount;
+    inputCursorCol = 1 + pad + prefixW + (bufW - shownW);
+    if (inputCursorCol > 1 + pad + contentW) inputCursorCol = 1 + pad + contentW;
+}
+
+/* Redraws the box, flushes the frame and parks the terminal cursor inside the
+   input row, right after the typed text. */
+static void drawInputFrame(void)
+{
+    render_clear();
+    render_input_box(inputPrompt, inputBuf);
+    ui_flush();
+    printf("\033[%d;%dH", inputCursorRow + 1, inputCursorCol + 1);
+    fflush(stdout);
+}
 
 void ui_input_screen(const char *name)
 {
     snprintf(inputScreen, sizeof inputScreen, "%s", name);
-}
-
-/* Input frame: single-line header, panel with label, accent "> " prompt.
-   The prompt sits on grid row 3 (baris 4), independent of terminal size. */
-static void drawInputFrame(void)
-{
-    render_clear();
-    if (caps_unicode())
-        render_text(0, 0, ST_TITLE, "GACHA QUEST · %s", inputScreen);
-    else
-        render_text(0, 0, ST_TITLE, "GACHA QUEST > %s", inputScreen);
-    ui_panel(1, 0, 50, 5, "Input");
-    render_text(2, 2, ST_TEXT, "%s", inputPrompt);
-    promptRow = 3;
-    promptCol = 2;
-    render_text(promptRow, 0, ST_ACCENT, "> ");
-    render_text(render_max_row() + 2, 0, ST_DIM, "Enter konfirmasi  Esc batal");
 }
 
 void ui_line_begin(const char *fmt, ...)
@@ -408,25 +620,21 @@ void ui_line_begin(const char *fmt, ...)
     va_start(args, fmt);
     vsnprintf(inputPrompt, sizeof inputPrompt, fmt, args);
     va_end(args);
+    inputBuf[0] = '\0';
+    inputNote[0] = '\0';
+    inputNoteStyle = ST_DANGER;
     if (!caps_interactive()) {
         printf("%s", inputPrompt);
         fflush(stdout);
         return;
     }
     drawInputFrame();
-    ui_flush();
-    printf("\033[%d;%dH", promptRow + 1, promptCol + 1);
-    fflush(stdout);
     term_cursor(1);
-    term_cooked();
 }
 
 void ui_line_end(void)
 {
-    if (caps_interactive()) {
-        term_cursor(0);
-        term_raw();
-    }
+    if (caps_interactive()) term_cursor(0);
 }
 
 void ui_line_prompt(void)
@@ -436,19 +644,16 @@ void ui_line_prompt(void)
         fflush(stdout);
         return;
     }
-    printf("\033[%d;%dH", promptRow + 1, promptCol + 1);
-    fflush(stdout);
+    drawInputFrame();
 }
 
-/* Shared tail: redraw the frame, print one line below the prompt, put the
-   cursor back. The frame redraw wipes the old prompt and typed text. */
+/* Shared tail: set the note line, redraw the box with whatever has been typed
+   so far, and park the cursor back on the input row. */
 static void lineNote(Style st, const char *buf)
 {
+    snprintf(inputNote, sizeof inputNote, "%s", buf);
+    inputNoteStyle = st;
     drawInputFrame();
-    render_text(promptRow + 1, 0, st, "%s", buf);
-    ui_flush();
-    printf("\033[%d;%dH", promptRow + 1, promptCol + 1);
-    fflush(stdout);
 }
 
 void ui_line_error(const char *fmt, ...)
@@ -480,6 +685,65 @@ void ui_line_note(const char *fmt, ...)
         return;
     }
     lineNote(ST_SUCCESS, buf);
+}
+
+/* Reads one line inside the input box. 1 line, 0 EOF, -1 Esc. */
+int ui_line_read(char *buf, int max)
+{
+    int len;
+
+    if (!caps_interactive()) {
+        if (fgets(buf, max, stdin) == NULL) return 0;
+        buf[strcspn(buf, "\r\n")] = '\0';
+        return 1;
+    }
+    if (max < 2) {
+        buf[0] = '\0';
+        return 1;
+    }
+    len = (int)strlen(inputBuf);
+    for (;;) {
+        char ch;
+        TermKey k = term_getkey(&ch);
+
+        if (k == KEY_EOF) {
+            snprintf(buf, (size_t)max, "%s", inputBuf);
+            return 0;
+        }
+        if (k == KEY_RESIZE) {
+            term_size_query();
+            drawInputFrame();
+            continue;
+        }
+        if (k == KEY_ENTER) {
+            snprintf(buf, (size_t)max, "%s", inputBuf);
+            return 1;
+        }
+        if (k == KEY_ESC) {
+            buf[0] = '\0';
+            inputBuf[0] = '\0';
+            return -1;
+        }
+        if (k != KEY_CHAR) continue;
+        if (ch == '\r' || ch == '\n') {
+            snprintf(buf, (size_t)max, "%s", inputBuf);
+            return 1;
+        }
+        if (ch == 0x7f || ch == '\b') {
+            if (len > 0) {
+                len--;
+                while (len > 0 && ((unsigned char)inputBuf[len] & 0xC0) == 0x80) len--;
+                inputBuf[len] = '\0';
+                drawInputFrame();
+            }
+            continue;
+        }
+        if ((unsigned char)ch >= 0x20 && len < max - 1) {
+            inputBuf[len++] = ch;
+            inputBuf[len] = '\0';
+            drawInputFrame();
+        }
+    }
 }
 
 /* Row picker for tables. Keys: arrows move, Enter confirms, Esc cancels. */

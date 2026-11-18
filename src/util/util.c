@@ -20,50 +20,8 @@ int readLine(char *buf, int max)
    0 for EOF, -1 when the player pressed Esc. */
 int readLineEsc(char *buf, int max)
 {
-    char ch;
-    int len = 0;
-
     if (!caps_interactive()) return readLine(buf, max) ? 1 : 0;
-    term_raw();
-    for (;;) {
-        TermKey k = term_getkey(&ch);
-        if (k == KEY_ENTER) {
-            buf[len] = '\0';
-            fputc('\n', stdout);
-            fflush(stdout);
-            return 1;
-        }
-        if (k == KEY_ESC) {
-            buf[0] = '\0';
-            fputc('\n', stdout);
-            fflush(stdout);
-            return -1;
-        }
-        if (k == KEY_EOF) {
-            buf[len] = '\0';
-            return 0;
-        }
-        if (k != KEY_CHAR) continue;
-        if (ch == '\r' || ch == '\n') {
-            buf[len] = '\0';
-            fputc('\n', stdout);
-            fflush(stdout);
-            return 1;
-        }
-        if (ch == 0x7f || ch == '\b') {
-            if (len > 0) {
-                len--;
-                fputs("\b \b", stdout);
-                fflush(stdout);
-            }
-            continue;
-        }
-        if ((unsigned char)ch >= 0x20 && len < max - 1) {
-            buf[len++] = ch;
-            fputc(ch, stdout);
-            fflush(stdout);
-        }
-    }
+    return ui_line_read(buf, max);
 }
 
 /* Returns 1 when a value was entered, 0 on Esc or EOF (out is then min). */
@@ -156,10 +114,12 @@ void readString(const char *prompt, char *out, int max)
     readStringTry(prompt, out, max);
 }
 
-/* y/n confirmation. Esc and EOF count as "no". */
+/* y/n confirmation. Interactive screens get an inline box at the bottom so the
+   current screen is not replaced. Piped input keeps the line-based prompt. */
 int confirmPrompt(const char *prompt)
 {
     char answer[MAX_NAME];
+    if (caps_interactive()) return ui_confirm_box(prompt);
     if (!readStringTry(prompt, answer, MAX_NAME)) return 0;
     return answer[0] == 'y' || answer[0] == 'Y';
 }

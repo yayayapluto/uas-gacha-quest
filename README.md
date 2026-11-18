@@ -29,11 +29,23 @@ tanpa `system("cls")` dan tanpa teks lama menumpuk.
   lewat `set_message()` dan dirender di slot tetap setelah redraw, jadi tidak
   tertimpa clear. Warna: judul cyan, error merah, sukses/hijau, rarity
   Legendary magenta / Epic kuning / Rare cyan.
-- **Pause.** Setelah hasil yang perlu dibaca (hasil gacha, ringkasan battle,
-  keluar dungeon) muncul "Tekan Enter untuk lanjut..." (`ui_wait_enter`); saat
-  stdin bukan terminal (input pipa), pause dilewati otomatis.
+- **Tanpa jeda buatan.** Tidak ada lagi layar "Tekan Enter untuk lanjut":
+  hasil battle dan keluar dungeon langsung tampil di baris pesan layar
+  berikutnya, hasil gacha langsung terlihat di panel `Hasil` dengan menu
+  pull yang sudah aktif, dan layar info (`Status`, `Leaderboard`) ditutup
+  dengan tombol apa saja (`ui_wait_enter` sudah dihapus dari kode).
+- **Box Input inline.** Semua prompt (nama pemain, seed dunia, jumlah potion,
+  indeks item, konfirmasi y/n) memakai satu box `Input` bergaya rounded seperti
+  panel lain, menempel tepat di bawah baris header (bukan di dasar layar). Pertanyaan di-wrap per kata
+  (`wrap_teks`), lebar konten dihitung dari lebar terminal saat render
+  (`lebar_tampil` menghitung glyph CJK/emoji 2 kolom), dan tinggi box mengikuti
+  jumlah baris pertanyaan + satu baris input. Prompt `> `, teks yang diketik,
+  dan kursor berada di dalam border; teks panjang digeser horizontal sehingga
+  kursor selalu terlihat, backspace menghapus satu codepoint, Esc membatalkan,
+  dan resize menggambar ulang box dengan lebar baru. Di terminal di bawah 20
+  kolom padding dilepas, border tetap utuh.
 - **Input tidak valid** (huruf, di luar rentang, kosong, EOF) menyebabkan layar
-  yang sama digambar ulang dengan pesan error, tanpa crash.
+  yang sama digambar ulang dengan pesan error di dalam box, tanpa crash.
 - **Arsitektur render.** Setiap layar adalah grid sel (`Cell`: codepoint + gaya)
   yang digambar ke frame buffer, lalu `render_flush()` menuliskannya sekali:
   mode interaktif memakai cursor positioning + warna per run, mode fallback
@@ -160,13 +172,18 @@ bin/game          (Linux: ./bin/game)
    8 Epic, 4 Legendary. Rarity: Common/Rare/Epic/Legendary; pity dijamin Epic
    setelah 10 tarikan tanpa Epic+. Item duplikat otomatis jadi gold.
 4. **Inventory** (hub menu 3) → lihat, urutkan (rarity/power/nama), cari, equip.
+   Panel daftar hanya memuat 4 baris; item ke-5 dan seterusnya dipilih lewat
+   layar `Equip Item` yang daftarnya bisa di-scroll (panah atas/bawah), bukan
+   dengan mengetik nomor indeks buta.
 5. **Shop** (hub menu 4) → tampil sebagai daftar produk (nama, harga, stok)
    dengan panel `Detail` untuk baris terpilih. Beli potion (40 gold, maks 20),
    atau Jual item: layar `Jual Item` menampilkan inventory dengan warna rarity,
-   item terpasang ditandai dan tidak bisa dijual.
-6. **Dungeon** (hub menu 5) → dunia prosedural tak berujung dari seed, gerak
-   WASD, `$` = treasure (+30 gold), H = hint BFS ke treasure terdekat
-   (30 gold, maks 3x), Q = keluar. Rincian di bagian berikut.
+   item terpasang ditandai dan tidak bisa dijual. Daftar 12 barisnya ikut
+   menggulir mengikuti pilihan, jadi item ke-13 dan seterusnya tetap terlihat.
+6. **Dungeon** (hub menu 5) → langsung masuk ke peta tanpa layar perantara;
+   dunia prosedural tak berujung dari seed, gerak WASD atau panah, `$` = treasure
+   (+30 gold), H = hint BFS ke treasure terdekat (30 gold, maks 3x), Q = keluar.
+   Footer di bawah peta menulis kontrol itu lengkap. Rincian di bagian berikut.
 7. **Simpan** (hub menu 7) → picker 5 slot: pilih slot kosong, timpa slot
    terisi (nama pemainnya tampil), atau "Buat save baru" yang menunjuk slot
    kosong pertama. Kembali ke menu utama juga menawarkan simpan, lalu skor
@@ -193,21 +210,47 @@ menyimpan peta.
   monster 45%, chest 35%, gold 55%. Yang kena dipasang satu sel lantai hasil
   hash, jadi jumlah isi sebanding jumlah chunk, bukan jumlah lantai. Chest
   membuka roll loot sendiri (55% equipment dengan bobot rarity seperti gacha,
-  25% potion, sisanya gold) dan menampilkan animasi slot horizontal.
+  25% potion, sisanya gold) dan membuka panel **Gacha** inline.
 - **Fog dan biome.** Hanya sel dalam radius fog dari pemain yang digambar, dan
-  fog bergerak mengikuti pemain. Radius = 45% dari setengah sumbu terkecil
-  (minimum 4), jadi terminal lebar memperlihatkan lebih banyak dunia.
+  fog berpusat di posisi pemain (bukan di tengah box), jadi lingkaran ikut
+  bergeser sampai tepi box dan boleh terpotong border. Radius tetap 6 sel
+  dengan bobot vertikal 2 (sel karakter dua kali lebih tinggi daripada lebar),
+  sehingga area terang tetap bulat di layar.
   Tembok memakai palet biome dari `cellHash(seed, x/32, y/32)`: 8 palet
   (stone, cavern, moss, crystal, ember, frozen, desert, void) dengan warna
   latar berbeda supaya perpindahan area terasa.
+- **Kamera dengan margin tepi.** Viewport memakai seluruh isi box Peta.
+  Pemain bebas bergerak di dalam zona aman 3 sel; peta baru bergeser ketika
+  pemain menyentuh margin itu. Dunia prosedural tanpa batas, jadi kamera tidak
+  pernah dikunci ke tepi dunia. Setelah resize (atau box Peta mengecil karena
+  panel Battle muncul) kamera dihitung ulang supaya pemain tetap terlihat.
+- **Panel Battle inline.** Saat pemain menyentuh monster, box Battle muncul di
+  antara Peta dan Status: nama monster + HP bar, tiga baris log aksi terakhir,
+  dan baris aksi `[A] Serang  [D] Bertahan  [P] Potion  [R] Kabur`. Selama
+  battle aktif input gerakan diabaikan dan tinggi Peta menyusut otomatis agar
+  Battle + Status tetap muat. Menang memberi EXP, gold, dan skor lalu box
+  hilang; kalah membuka layar game over yang sama dengan battle layar penuh.
+- **Panel Gacha inline.** Chest tidak lagi mengambil alih layar: animasi slot
+  horizontal berjalan di slot box yang sama dengan Battle, langsung di antara
+  Peta dan Status, sementara peta tetap dirender. Strip memakai offset kuadrat
+  sehingga melambat di akhir (sekitar 2,6 detik geser + 6 frame settle), sel hasil berkedip dengan highlight `ST_SELECTED` di bawah panah `^`,
+  lalu rarity, nama item (atau `Gold +N` / `Potion +N`) dan keterangannya
+  tampil di panel. Selama animasi tidak ada tombol yang dibaca: input pemain
+  menunggu sampai strip mendarat, lalu loot masuk ke inventory/gold tepat satu kali.
+- **Status tiga baris.** Box Status memakai border rounded dan tiga baris
+  sejajar: `HP` + bar panjang adaptif (10..30 sel, hijau di atas 60%, kuning 30-60%,
+  merah di bawah 30%) + angka HP, lalu `Posisi (x, y)` + `Langkah N` + `Gold N`, lalu
+  `Seed`. Di terminal sempit (di bawah 50 kolom) baris Posisi dipecah dua agar tidak
+  terpotong.
 - **Seed sama, peta sama.** Seed yang diminta saat game baru ikut tersimpan di
   save slot, jadi **Load Game** mengembalikan dunia yang sama persis.
   Seed juga tampil di menu Status dan di baris info dungeon.
 - **Seed kosong.** Kalau prompt seed dijawab Enter, program memakai seed dari
   jam sistem dan menampilkannya supaya bisa dicatat dan dipakai ulang.
-- **Cache 5x5 chunk.** Dungeon hanya menghitung area 80x80 sel di sekitar
-  pemain, lalu menggeser cache ketika pemain pindah chunk. Kamera menampilkan
-  jendela 25x15 dengan pemain selalu di tengah.
+- **Cache 5x5 chunk.** Dungeon hanya menghitung area 80x80 sel, lalu area itu
+  digeser mengikuti kamera (`syncArea`) setiap frame yang bergeser, jadi setiap
+  sel yang digambar selalu punya indeks valid. Lebar viewport dibatasi 78 sel
+  supaya selalu tertutup area cache.
 - **Kalah = game over.** Kekalahan tidak lagi memulihkan HP diam-diam.
   Layar game over muncul langsung (tanpa Enter) dengan dua pilihan: reset run
   (level, HP, gold, potion, dan item kembali ke awal; nama dan seed tetap) atau
@@ -245,10 +288,11 @@ menyimpan peta.
 | src/platform/atomicfile.c/.h | Tulis atomik (tmp + fsync + rename) dan pembersihan tmp yatim |
 | src/platform/lock.c/.h | Kunci sesi `data/session.lock` (RUNNING/CLEAN) |
 | src/platform/sig.c/.h | Sinyal shutdown: self-pipe + poll (POSIX), SetConsoleCtrlHandler (Windows) |
-| src/platform/crash.c/.h | Handler crash di sigaltstack: pulihkan terminal, catat `data/crash.log` |
+| src/platform/crash.c/.h | Handler crash: Windows `SetUnhandledExceptionFilter`, POSIX sigaltstack; memulihkan terminal dan mencatat lokasi crash |
+| src/platform/log.c/.h | Log ke `data/game.log` (timestamp, level, flush per baris, rotasi 1 MiB -> `game.log.1`) |
 | src/platform/autosave.c/.h | Thread autosave (debounce, CRC, rotasi .bak, backoff) |
 | src/platform/platform.c/.h | platform_init/shutdown, status sesi sebelumnya, toggle permintaan shutdown |
-| data/ | item.txt, monster.txt (runtime: save_1..5.txt, leaderboard.txt, autosave.dat/.bak, session.lock, crash.log) |
+| data/ | item.txt, monster.txt (runtime: save_1..5.txt, leaderboard.txt, autosave.dat/.bak, session.lock, crash.log, game.log) |
 | tests/ | Driver uji C + skenario input pipa + run_tests.sh |
 
 Nama fungsi dan komentar di kode memakai bahasa Inggris. Teks yang dilihat
@@ -265,7 +309,8 @@ Dibuat saat bermain, tidak perlu di-commit (ada di `.gitignore`):
 | `autosave.dat` | Snapshot biner: magic `GQAS`, versi, panjang, CRC32, lalu struct `AutoSnapshot` (pemain, layar aktif, state battle/dungeon, state RNG) |
 | `autosave.bak` | Snapshot sebelumnya, dipakai bila `autosave.dat` rusak/terpotong |
 | `session.lock` | `RUNNING pid=<pid> start=<epoch>` selama berjalan, `CLEAN` setelah keluar rapi |
-| `crash.log` | Satu baris per crash (`crash sig=<n> pid=<pid>`) |
+| `crash.log` | POSIX: satu baris per crash (`crash sig=<n> pid=<pid>`); Windows memakai `game.log` |
+| `game.log` | Trace aplikasi: timestamp, level, aksi menu/hub, mulai/selesai modul, dan baris `FATAL` saat crash. Rotasi ke `game.log.1` setelah 1 MiB |
 
 ## Format data/save_N.txt
 

@@ -12,7 +12,6 @@ void ui_shutdown(void);
 int ui_interactive(void);
 void set_message(const char *fmt, ...);
 const char *last_message(void);
-void ui_wait_enter(const char *text);
 
 /* Scrolling action log: shown in panels; printed immediately in fallback mode. */
 void ui_log(const char *fmt, ...);
@@ -37,10 +36,13 @@ void ui_flush(void);                     /* send the frame to the terminal */
 
 void ui_panel(int row, int col, int w, int h, const char *title);
 void ui_hp_bar(int row, int col, int w, int hp, int maxHp);
+/* Exact-width HP bar shared by the Status panel and the Battle panel. */
+void ui_hp_bar_n(int row, int col, int w, int hp, int maxHp);
 void ui_bar(int row, int col, int w, int cur, int max, Style fill);
 void ui_menu_v(int row, int col, const char *const *items, const int *nums, int n, int sel);
 void ui_menu_h(int row, int col, const char *const *items, const int *nums, int n, int sel);
 void ui_footer(const char *extra);
+void ui_footer_line(const char *text);
 void ui_message(int row);                /* shows last_message when interactive */
 void ui_status_panel_at(const Player *p, int row, int col, int w);
 
@@ -48,15 +50,25 @@ void ui_status_panel_at(const Player *p, int row, int col, int w);
 int ui_menu_pick(const char *const *items, const int *nums, int n,
                  int minNum, int maxNum, UiDrawFn draw, void *ctx);
 
+/* Inline y/n confirmation in a box at the bottom of the current screen.
+   Returns 1 for Ya, 0 for Tidak/Esc. */
+int ui_confirm_box(const char *question);
+
 /* Line prompts: each prompt gets its own input frame (header + panel + "> "
    prompt); the cursor is placed right after the prompt, computed from the
    drawn frame, never from the terminal size. */
 void ui_input_screen(const char *name);      /* header title for the next prompt */
-void ui_line_begin(const char *fmt, ...);    /* draw input frame, enter cooked mode */
+void ui_line_begin(const char *fmt, ...);    /* draw the input box with this question */
 void ui_line_end(void);
-void ui_line_prompt(void);                   /* reposition cursor at the prompt */
-void ui_line_error(const char *fmt, ...);    /* redraw frame + danger line below prompt */
-void ui_line_note(const char *fmt, ...);     /* result line below the prompt */
+void ui_line_prompt(void);                   /* redraw the box at the prompt */
+void ui_line_error(const char *fmt, ...);    /* box + danger note line */
+void ui_line_note(const char *fmt, ...);     /* box + success note line */
+/* Inline editor inside the box: 1 line, 0 EOF, -1 Esc. */
+int ui_line_read(char *buf, int max);
+/* Input-box helpers, width-aware (wide glyphs count two columns). */
+int lebar_tampil(const char *s);
+int wrap_teks(const char *text, int width, char rows[][192], int maxRows);
+void render_input_box(const char *question, const char *buffer);
 
 /* Row picker for tables (inventory equip / shop sell). Returns index or -1. */
 int ui_pick_row(int count, UiDrawFn draw, void *ctx);

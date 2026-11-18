@@ -9,14 +9,14 @@ MODUL = main.c \
         src/storage/storage.c src/dungeon/dungeon.c \
         src/platform/rng.c src/platform/atomicfile.c src/platform/lock.c \
         src/platform/sig.c src/platform/crash.c src/platform/autosave.c \
-        src/platform/platform.c
+        src/platform/log.c src/platform/platform.c
 BIN = bin
 UIPREVIEW_SRC = tools/ui_preview.c \
         src/ui/ui.c src/ui/term.c src/ui/caps.c src/ui/style.c \
         src/ui/render.c src/ui/widgets.c src/util/util.c \
         src/platform/rng.c src/platform/atomicfile.c src/platform/lock.c \
         src/platform/sig.c src/platform/crash.c src/platform/autosave.c \
-        src/platform/platform.c
+        src/platform/log.c src/platform/platform.c
 
 ifeq ($(OS),Windows_NT)
 LDLIBS =

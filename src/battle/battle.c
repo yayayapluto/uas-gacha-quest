@@ -70,6 +70,11 @@ static int gameOverScreen(Player *p)
     return ui_menu_pick(items, nums, 2, 1, 2, gameOverDraw, p);
 }
 
+int battleGameOverScreen(Player *p)
+{
+    return gameOverScreen(p);
+}
+
 int calculateDamage(int atk, int def)
 {
     int base = atk - def;
@@ -174,6 +179,10 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
                 ui_log_style(ST_SUCCESS, "%s menang!", p->name);
                 ui_log_style(ST_TEXT, "Hadiah: +%d EXP, +%d gold, +%d skor.",
                              enemy.exp, enemy.gold, enemy.exp);
+                /* the hub has no log panel, so the reward must also land in the
+                   message row or the win goes by unseen */
+                set_message("Menang! +%d EXP, +%d gold, +%d skor.",
+                            enemy.exp, enemy.gold, enemy.exp);
                 addExp(p, enemy.exp);
                 p->gold += enemy.gold;
                 p->score += enemy.exp;
@@ -217,6 +226,7 @@ static void battleLoop(Player *p, Monster enemy, int enemyHp)
         case 4:
             if (plat_rand() % 2 == 0) {
                 ui_log_style(ST_SUCCESS, "Kabur berhasil! Battle selesai tanpa hadiah.");
+                set_message("Kabur berhasil. Battle selesai tanpa hadiah.");
                 alive = 0;
             } else {
                 ui_log_style(ST_DANGER, "Kabur gagal!");

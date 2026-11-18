@@ -18,14 +18,21 @@ typedef enum {
     ST_RARITY_LEGENDARY,
     ST_BRONZE,
     ST_SELECTED,    /* selection background; foreground chosen by the widget */
+    ST_FOG1,        /* distance fog: three fading grey levels (near..far) */
+    ST_FOG2,
+    ST_FOG3,
     ST_BIOME_BASE,  /* +0..7 dungeon biome wall styles, do not use directly */
-    ST_HP_GRAD_BASE = ST_BIOME_BASE + 8, /* +0..10 gradient slots */
+    ST_BIOME_FOG_BASE = ST_BIOME_BASE + 8, /* +tier*8+biome, faded walls */
+    ST_HP_GRAD_BASE = ST_BIOME_FOG_BASE + 24, /* +0..10 gradient slots */
     ST_COUNT
 } Style;
 
 #define ST_HP_GRAD(i) ((Style)(ST_HP_GRAD_BASE + (i)))
 #define ST_BIOME(i) ((Style)(ST_BIOME_BASE + (i)))
+#define ST_FOG_LEVEL(i) ((Style)(ST_FOG1 + (i)))          /* i = 0..2 */
+#define ST_BIOME_FOG(tier, bi) ((Style)(ST_BIOME_FOG_BASE + (tier) * BIOME_COUNT + (bi)))
 #define BIOME_COUNT 8
+#define BIOME_FOG_TIERS 3
 
 void style_init(void);           /* build ANSI strings for the detected mode */
 

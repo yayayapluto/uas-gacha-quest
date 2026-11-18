@@ -9,10 +9,12 @@ void widget_panel(int row, int col, int w, int h, const char *title)
 {
     const Glyphs *g = caps_glyphs();
     int i, tlen = ui_visible_len(title);
+    int tmax = w - 2;   /* a longer title would run into the top-right corner */
     Style bs = ST_BORDER;
 
+    if (tlen > tmax) tlen = tmax;
     render_text(row, col, bs, "%s", g->tl);
-    render_text(row, col + 1, ST_ACCENT, "%s", title);
+    render_text_clipped(row, col + 1, tmax, ST_ACCENT, "%s", title);
     for (i = 1 + tlen; i < w - 1; i++) render_text(row, col + i, bs, "%s", g->hz);
     render_text(row, col + w - 1, bs, "%s", g->tr);
     for (i = 1; i < h - 1; i++) {
@@ -24,24 +26,28 @@ void widget_panel(int row, int col, int w, int h, const char *title)
     render_text(row + h - 1, col + w - 1, bs, "%s", g->br);
 }
 
-/* HP bar: gradient per cell in truecolor, threshold color in 256/16, mono relies on chars */
-void widget_hp_bar(int row, int col, int w, int hp, int maxHp)
+/* HP bar of exactly the requested width: filled cells share the threshold
+   colour (green above 60%, yellow 30-60%, red below), the remainder stays dark.
+   Callers lay the numbers out around this width, so the bar never overflows a
+   panel. */
+void widget_hp_bar_n(int row, int col, int w, int hp, int maxHp)
 {
     const Glyphs *g = caps_glyphs();
-    int filled = maxHp > 0 ? hp * (w - 2) / maxHp : 0;
+    int filled = maxHp > 0 ? hp * w / maxHp : 0;
+    Style s = style_hp(hp, maxHp);
     int i;
 
     if (filled < 0) filled = 0;
-    if (filled > w - 2) filled = w - 2;
-    for (i = 0; i < w - 2; i++) {
-        Style s;
-        if (caps_color() == COLOR_TRUE && filled > 0 && i < filled)
-            s = ST_HP_GRAD((i * 10) / (filled > 1 ? filled - 1 : 1));
-        else
-            s = style_hp(hp, maxHp);
-        if (i < filled) render_text(row, col + 1 + i, s, "%s", g->blockFull);
-        else render_text(row, col + 1 + i, ST_DIM, "%s", g->blockEmpty);
-    }
+    if (filled > w) filled = w;
+    for (i = 0; i < w; i++)
+        render_text(row, col + i, i < filled ? s : ST_DIM, "%s",
+                    i < filled ? g->blockFull : g->blockEmpty);
+}
+
+/* Boxed variant kept for the panels that reserve one padding cell per side. */
+void widget_hp_bar(int row, int col, int w, int hp, int maxHp)
+{
+    widget_hp_bar_n(row, col + 1, w - 2, hp, maxHp);
 }
 
 void widget_bar(int row, int col, int w, int cur, int max, Style fill)
@@ -102,6 +108,15 @@ void widget_footer(const char *extra)
     snprintf(buf, sizeof buf, "%s pilih  Enter konfirmasi  Esc kembali%s%s",
              caps_glyphs()->arrowUD, extra != NULL ? "  " : "", extra != NULL ? extra : "");
     render_text(row, 0, ST_DIM, "%s", buf);
+    footerRow = row;
+}
+
+/* Screens whose keys are not menu keys (the dungeon map) replace the standard
+   footer text instead of stacking a second, wrong hint after it. */
+void widget_footer_line(const char *text)
+{
+    int row = footerRow >= 0 ? footerRow : render_max_row() + 2;
+    render_text_clipped(row, 0, caps_cols(), ST_DIM, "%s", text);
     footerRow = row;
 }
 

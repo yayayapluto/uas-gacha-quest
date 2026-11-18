@@ -593,25 +593,29 @@ Indeks tidak ada di inventory.
 ## 10. Status
 
 ```
-+STATUS------------------------------------------+
+GACHA QUEST > Status
+--------------------------------------------------
++Status------------------------------------------+
 | Pemain : farras                                |
 | Level  : 1 (Skor 0)                            |
-| HP [##########] 100/100                        |
+| HP  #################################  100/100 |
 | Gold   : 200   Potion: 2                       |
 +------------------------------------------------+
-+DETAIL------------------------------------------+
++STATISTIK & PERLENGKAPAN------------------------+
 | Level      : 1 (EXP 0/50)                      |
-| ATK        : 10                                |
-| DEF        : 3                                 |
-| Potion     : 2                                 |
-| Pity       : 0/10                              |
-| Total pull : 0                                 |
+|  ------------------------------------------    |
+| ATK        : 10   DEF: 3                       |
+| Potion     : 2   Pity: 0/10                    |
+| Total pull : 0   Item: 0/36                    |
 | Seed dunia : 1794728246                        |
-| Item       : 0/36                              |
+| Senjata: -                                     |
+| Armor  : -                                     |
 +------------------------------------------------+
+Tekan tombol apa saja untuk kembali
 ```
 
-Baris senjata & armor terpasang (di bawah box):
+Satu panel untuk statistik dan perlengkapan, total 20 baris, supaya tidak
+terpotong di terminal 24 baris. Baris senjata & armor terpasang:
 
 ```
 Senjata: Storm Hammer (power 22)

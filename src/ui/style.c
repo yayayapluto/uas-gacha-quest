@@ -21,6 +21,9 @@ static const Rgb pal[ST_HP_GRAD_BASE] = {
     { 0xD5, 0x3F, 0x8C }, /* ST_RARITY_LEGENDARY */
     { 0xCD, 0x7F, 0x32 }, /* ST_BRONZE */
     { 0x2D, 0x37, 0x48 }, /* ST_SELECTED (background) */
+    { 0x5A, 0x64, 0x78 }, /* ST_FOG1: 55% of the lit palette */
+    { 0x3E, 0x46, 0x56 }, /* ST_FOG2 */
+    { 0x28, 0x2E, 0x3A }, /* ST_FOG3: nearly the background */
 };
 /* Dungeon biomes: only the wall palette changes, so the map keeps one shape
    and the player still reads walls at a glance. fg is the wall glyph, bg the
@@ -115,6 +118,28 @@ void style_init(void)
     for (i = 0; i < BIOME_COUNT; i++) {
         buildFg(ST_BIOME(i), &biomes[i].fg);
         buildBg(ST_BIOME(i), &biomes[i].bg);
+    }
+    /* Walls seen through the fog: the biome palette blended into the dark
+       background, so distant terrain keeps its shape but loses brightness. */
+    {
+        static const Rgb fogBase = { 0x14, 0x18, 0x20 };
+        static const float fade[BIOME_FOG_TIERS] = { 0.55f, 0.32f, 0.16f };
+        int tier, b;
+        for (tier = 0; tier < BIOME_FOG_TIERS; tier++) {
+            for (b = 0; b < BIOME_COUNT; b++) {
+                Style s = ST_BIOME_FOG(tier, b);
+                Rgb fg, bg;
+                float f = fade[tier];
+                fg.r = (unsigned char)(fogBase.r + (biomes[b].fg.r - fogBase.r) * f);
+                fg.g = (unsigned char)(fogBase.g + (biomes[b].fg.g - fogBase.g) * f);
+                fg.b = (unsigned char)(fogBase.b + (biomes[b].fg.b - fogBase.b) * f);
+                bg.r = (unsigned char)(fogBase.r + (biomes[b].bg.r - fogBase.r) * f);
+                bg.g = (unsigned char)(fogBase.g + (biomes[b].bg.g - fogBase.g) * f);
+                bg.b = (unsigned char)(fogBase.b + (biomes[b].bg.b - fogBase.b) * f);
+                buildFg(s, &fg);
+                buildBg(s, &bg);
+            }
+        }
     }
     /* HP gradient: good -> mid -> low, 11 slots */
     for (i = 0; i <= 10; i++) {

@@ -166,7 +166,6 @@ void gachaMenu(Player *p, const Item catalog[], int count)
             }
             {
                 char question[128];
-                ui_input_screen("Gacha");
                 snprintf(question, sizeof question, "Beli 10x pull (%d gold)? (y/n): ", PULL10_COST);
                 if (!confirmPrompt(question)) continue;
             }
@@ -190,6 +189,5 @@ void gachaMenu(Player *p, const Item catalog[], int count)
             autosave_publish(p, AS_SCREEN_HUB, NULL, 0, NULL, 0, 0, 1);
         }
         gachaDraw(p, -1);
-        ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
     }
 }

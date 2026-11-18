@@ -17,6 +17,7 @@
 #include "platform.h"
 #include "autosave.h"
 #include "rng.h"
+#include "log.h"
 
 /* Slot picker shared by Load Game and Simpan. Rows show the saved player name
    so the player can tell saves apart; a free slot reads "(kosong)". When
@@ -139,22 +140,29 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
             set_message("Autosave gagal: %s", err);
         choice = hubMenu(p);
         if (choice < 0 || platform_shutdown_requested()) {
+            log_event("hub keluar (choice=%d)", choice);
             if (!platform_shutdown_requested()) autosave_publish(p, AS_SCREEN_MENU, NULL, 0, NULL, 0, 0, 1);
             return;
         }
+        log_event("hub aksi=%d hp=%d gold=%d", choice, p->hp, p->gold);
         switch (choice) {
-        case 1: startBattle(p, monsters, monsterCount); break;
-        case 2: gachaMenu(p, catalog, catalogCount); break;
-        case 3: inventoryMenu(p); break;
-        case 4: shopMenu(p); break;
-        case 5: runDungeon(p, catalog, catalogCount, monsters, monsterCount); break;
-        case 6: showStatus(p); break;
+        case 1: log_event("battle mulai"); startBattle(p, monsters, monsterCount);
+                log_event("battle selesai hp=%d", p->hp); break;
+        case 2: log_event("gacha mulai"); gachaMenu(p, catalog, catalogCount);
+                log_event("gacha selesai gold=%d", p->gold); break;
+        case 3: log_event("inventory mulai"); inventoryMenu(p); break;
+        case 4: log_event("shop mulai"); shopMenu(p); break;
+        case 5: log_event("dungeon mulai"); runDungeon(p, catalog, catalogCount, monsters, monsterCount);
+                log_event("dungeon selesai hp=%d gold=%d", p->hp, p->gold); break;
+        case 6: log_event("status dibuka"); showStatus(p); log_event("status ditutup"); break;
         case 7: {
             int slot = pickSaveSlot(1);
+            log_event("simpan slot=%d", slot);
             if (slot > 0 && saveSlotExists(slot)) {
                 char question[96];
                 snprintf(question, sizeof question, "Timpa save di slot %d? (y/n): ", slot);
                 if (!confirmPrompt(question)) {
+                    log_event("simpan dibatalkan slot=%d", slot);
                     set_message("Penyimpanan dibatalkan.");
                     saved = 0;
                     break;
@@ -162,11 +170,12 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
             }
             if (slot > 0) saved = saveGameSlot(p, slot);
             else saved = 0;
+            log_event("simpan slot=%d hasil=%d", slot, saved);
             break;
         }
         case 0: {
+            log_event("keluar ke menu utama");
             if (!saved) {
-                ui_input_screen("Hub");
                 if (confirmPrompt("Simpan sebelum keluar? (y/n): ") && !saveGame(p))
                     set_message("Gagal menyimpan sebelum keluar.");
             }
@@ -176,7 +185,6 @@ void runHub(Player *p, const Item catalog[], int catalogCount, const Monster mon
                 set_message("%s Kembali ke menu utama.", last_message());
             else
                 set_message("Kembali ke menu utama.");
-            ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             return;
         }
         }
@@ -189,6 +197,8 @@ static void resumeSession(const AutoSnapshot *snap, const Item catalog[], int ca
 {
     Player p = snap->player;
     plat_rng_set(snap->rng);
+    log_event("pulihkan sesi screen=%d battle=%d dungeon=%d player=%s",
+              (int)snap->screen, snap->battleActive, snap->dungeonActive, p.name);
     switch (snap->screen) {
     case AS_SCREEN_BATTLE:
         if (snap->battleActive) {
@@ -221,11 +231,15 @@ int main(void)
     int running = 1;
 
     platform_init();
+    log_init();
+    log_event("program mulai");
     plat_srand((unsigned)time(NULL));
 
     catalogCount = loadCatalog("data/item.txt", catalog);
     monsterCount = loadMonsters("data/monster.txt", monsters);
+    log_event("data dimuat: item=%d monster=%d", catalogCount, monsterCount);
     if (catalogCount == 0 || monsterCount == 0) {
+        log_error("katalog item/monster gagal dimuat");
         printf("Katalog item atau monster tidak bisa dimuat, program berhenti.\n");
         return 1;
     }
@@ -245,6 +259,7 @@ int main(void)
     ui_init();
     while (running) {
         int choice = mainMenu();
+        log_event("menu utama pilih=%d", choice);
         switch (choice) {
         case 1: {
             char name[MAX_NAME];
@@ -253,25 +268,28 @@ int main(void)
                 break;
             initPlayer(&player, name);
             if (!promptWorldSeedTry(&player.seed)) break;
+            log_event("game baru name=%s seed=%u", player.name, player.seed);
             set_message("Selamat datang, %s! Kamu dapat 200 gold.", player.name);
             runHub(&player, catalog, catalogCount, monsters, monsterCount);
             break;
         }
         case 2: {
             int slot = pickSaveSlot(0);
+            log_event("load slot=%d", slot);
             if (slot > 0 && loadGameSlot(&player, catalog, catalogCount, slot)) {
+                log_event("load sukses slot=%d player=%s", slot, player.name);
                 runHub(&player, catalog, catalogCount, monsters, monsterCount);
             } else {
                 if (slot > 0 && last_message()[0] == 0) set_message("Slot %d tidak bisa dimuat.", slot);
-                ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             }
             break;
         }
         case 3:
+            log_event("leaderboard dibuka");
             showLeaderboard();
-            ui_wait_enter("Tekan Enter untuk lanjut (panah baru aktif setelah ini).");
             break;
         case 0:
+            log_event("program keluar dari menu utama");
             shutdownGame();
             running = 0;
             break;
