@@ -3,6 +3,7 @@
 Mini RPG + Gacha berbasis CLI (Bahasa C) sesuai `docs/Projek UAS Daspro Gacha Quest 41774797398a802c9345c49291a6f695.md`.
 
 Catatan lengkap semua layar (tampilan, warna, pesan): `UI.md`.
+Tangkapan layar semua layar: [`docs/screens.md`](docs/screens.md).
 
 ## Quick Way
 
